@@ -849,7 +849,7 @@ public class SpawnManager(WorldInstance parentWorld)
     public void SpawnAll()
     {
         Logger.Info("Spawning NPCs...");
-        SpawnTasks.Add(Task.Run(SpawnAllNpcs));
+        // NPCs are spawned lazily by WorldManager.ActiveRegionTick when a player is nearby.
 
         Logger.Info("Spawning Doodads...");
         SpawnTasks.Add(Task.Run(() =>

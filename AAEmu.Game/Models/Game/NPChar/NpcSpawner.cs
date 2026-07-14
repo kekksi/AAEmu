@@ -459,8 +459,9 @@ public class NpcSpawner : Spawner<Npc>
         // Проверяем, есть ли кэш для текущего SpawnerId
         if (_playerInRadiusCache.TryGetValue((int)SpawnerId, out var cache))
         {
-            // Если с момента последнего обновления прошло меньше 10 секунд, возвращаем кэшированное значение
-            if ((DateTime.UtcNow - cache.LastUpdate).TotalSeconds < 10)
+            // A negative result becomes stale as soon as a character enters or teleports.
+            // Cache only positive hits so nearby NPCs activate on the next world tick.
+            if (cache.IsPlayerInRadius && (DateTime.UtcNow - cache.LastUpdate).TotalSeconds < 10)
             {
                 return cache.IsPlayerInRadius;
             }
