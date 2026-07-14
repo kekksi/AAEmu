@@ -1327,14 +1327,7 @@ public partial class Npc : Unit
         resList.Add(abuser.Transform.World.Position);
         var reducedPath = ParentWorld.Template.GeoData.ReducePath(resList, 10);
         Ai.PathNode.FoundPath = reducedPath;
-        if (abuser is Character player)
-        {
-            player.SendMessage($"Aggro from {Ai.Owner.ObjId}, getting attack path in {Ai.PathNode.FoundPath.Count}/{resList.Count} steps");
-            foreach (var v3 in Ai.PathNode.FoundPath)
-            {
-                player.SendMessage($"Path step -> {v3}");
-            }
-        }
+        // Debug path spam removed (Auroria): kein Path-step/Aggro-Chat mehr fuer Spieler
     }
 
     /// <summary>
