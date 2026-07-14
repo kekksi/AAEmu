@@ -47,12 +47,14 @@ public class GradeEnchant : SpecialEffectAction
         // Get Regrade Scroll Item
         if (casterObj is not SkillItem scroll || scroll is null)
         {
+            Reject(character, skill, ErrorMessageType.InternalError, "missing regrade scroll caster");
             return;
         }
 
         // Get Item to regrade
         if (targetObj is not SkillCastItemTarget itemTarget || itemTarget is null)
         {
+            Reject(character, skill, ErrorMessageType.NotEnoughRequiredItem, "missing regrade target");
             return;
         }
 
@@ -72,31 +74,35 @@ public class GradeEnchant : SpecialEffectAction
         var item = character.Inventory.GetItemById(itemTarget.Id);
         if (item == null)
         {
-            // Invalid item
+            Reject(character, skill, ErrorMessageType.NotEnoughRequiredItem, $"target item {itemTarget.Id} was not found");
             return;
         }
         var initialGrade = item.Grade;
         var gradeTemplate = ItemManager.Instance.GetGradeTemplate(item.Grade);
+        if (gradeTemplate == null)
+        {
+            Reject(character, skill, ErrorMessageType.InternalError, $"item {item.Id} has unknown grade {item.Grade}");
+            return;
+        }
 
         var tasks = new List<ItemTask>();
 
         var cost = GoldCost(gradeTemplate, item, value3);
         if (cost == -1)
         {
-            // No gold on template, invalid ?
+            Reject(character, skill, ErrorMessageType.InternalError, $"item {item.Id} has no regrade cost data");
             return;
         }
 
         if (character.Money < cost)
         {
-            character.SendErrorMessage(ErrorMessageType.NotEnoughMoney);
+            Reject(character, skill, ErrorMessageType.NotEnoughMoney, $"needs {cost} copper, has {character.Money}");
             return;
         }
 
         if (!character.Inventory.CheckItems(SlotType.Inventory, scroll.ItemTemplateId, 1))
         {
-            // No scroll
-            character.SendErrorMessage(ErrorMessageType.NotEnoughRequiredItem);
+            Reject(character, skill, ErrorMessageType.NotEnoughRequiredItem, $"scroll {scroll.ItemTemplateId} is not in inventory");
             return;
         }
 
@@ -107,19 +113,26 @@ public class GradeEnchant : SpecialEffectAction
             charmItem = character.Inventory.GetItemById(charm.SupportItemId);
             if (charmItem == null)
             {
+                Reject(character, skill, ErrorMessageType.NotEnoughRequiredItem, $"support item {charm.SupportItemId} was not found");
                 return;
             }
 
             charmInfo = ItemManager.Instance.GetItemGradEnchantingSupportByItemId(charmItem.TemplateId);
+            if (charmInfo == null)
+            {
+                Reject(character, skill, ErrorMessageType.NotEnoughRequiredItem, $"support item {charmItem.TemplateId} has no regrade support data");
+                return;
+            }
+
             if (charmInfo.RequireGradeMin != -1 && item.Grade < charmInfo.RequireGradeMin)
             {
-                character.SendErrorMessage(ErrorMessageType.NotEnoughRequiredItem);
+                Reject(character, skill, ErrorMessageType.NotEnoughRequiredItem, $"support item {charmItem.TemplateId} requires grade {charmInfo.RequireGradeMin}+");
                 return;
             }
 
             if (charmInfo.RequireGradeMax != -1 && item.Grade > charmInfo.RequireGradeMax)
             {
-                character.SendErrorMessage(ErrorMessageType.GradeEnchantMax);
+                Reject(character, skill, ErrorMessageType.GradeEnchantMax, $"support item {charmItem.TemplateId} supports up to grade {charmInfo.RequireGradeMax}");
                 return;
             }
 
@@ -221,15 +234,18 @@ public class GradeEnchant : SpecialEffectAction
         switch (ItemType)
         {
             case 1:
-                var weaponTemplate = (WeaponTemplate)item.Template;
+                if (item.Template is not WeaponTemplate weaponTemplate)
+                    return -1;
                 slotTypeId = weaponTemplate.HoldableTemplate.SlotTypeId;
                 break;
             case 2:
-                var armorTemplate = (ArmorTemplate)item.Template;
+                if (item.Template is not ArmorTemplate armorTemplate)
+                    return -1;
                 slotTypeId = armorTemplate.SlotTemplate.SlotTypeId;
                 break;
             case 24:
-                var accessoryTemplate = (AccessoryTemplate)item.Template;
+                if (item.Template is not AccessoryTemplate accessoryTemplate)
+                    return -1;
                 slotTypeId = accessoryTemplate.SlotTemplate.SlotTypeId;
                 break;
         }
@@ -240,6 +256,8 @@ public class GradeEnchant : SpecialEffectAction
         }
 
         var enchantingCost = ItemManager.Instance.GetEquipSlotEnchantingCost(slotTypeId);
+        if (enchantingCost == null)
+            return -1;
 
         var itemGrade = gradeTemplate.EnchantCost;
         var itemLevel = item.Template.Level;
@@ -256,6 +274,13 @@ public class GradeEnchant : SpecialEffectAction
         var cost = (int)formula.Evaluate(parameters);
 
         return cost;
+    }
+
+    private static void Reject(Character character, Skill skill, ErrorMessageType error, string reason)
+    {
+        Logger.Warn($"GradeEnchant rejected for {character.Name} ({character.Id}): {reason}");
+        character.SendErrorMessage(error);
+        character.BroadcastPacket(new SCSkillEndedPacket(skill.TlId), true);
     }
 
     private static GradeTemplate GetNextGrade(GradeTemplate currentGrade, int gradeChange)
