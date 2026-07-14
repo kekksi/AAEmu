@@ -147,7 +147,9 @@ public partial class QuestManager(ITaskManager taskManager, IZoneManager zoneMan
             Logger.Info($"EnqueueEvaluation, {quest.Owner.Name} ({quest.Owner.Id}), Quest {quest.TemplateId}");
 
             if (needNewTask)
-                taskManager.Schedule(new QuestManagerRunQueueTask(), null, TimeSpan.FromMilliseconds(1));
+                // Queue evaluation once, shortly after the state change. The previous positional
+                // arguments turned this into an infinite 1 ms repeating task.
+                taskManager.Schedule(new QuestManagerRunQueueTask(), TimeSpan.FromMilliseconds(1));
         }
     }
 

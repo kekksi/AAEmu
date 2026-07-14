@@ -58,6 +58,53 @@ public class QuestManagerTests
             .WasCalled(Times.Once);
     }
 
+    [Test]
+    public async Task EnqueueEvaluation_SchedulesOneDelayedEvaluation()
+    {
+        var taskManager = new RecordingTaskManager();
+        var manager = CreateManager(taskManager);
+        var owner = Mock.Of<ICharacter>();
+        owner.Id.Returns(1u);
+        owner.Name.Returns("quest-test");
+        var quest = new Quest(
+            null,
+            owner.Object,
+            Mock.Of<IQuestManager>().Object,
+            Mock.Of<ITaskManager>().Object,
+            Mock.Of<ISkillManager>().Object,
+            Mock.Of<IExpressTextManager>().Object,
+            Mock.Of<IWorldManager>().Object)
+        { TemplateId = 42u };
+
+        manager.EnqueueEvaluation(quest);
+
+        await Assert.That(taskManager.ScheduleCallCount).IsEqualTo(1);
+        await Assert.That(taskManager.StartDelay).IsEqualTo(TimeSpan.FromMilliseconds(1));
+        await Assert.That(taskManager.RepeatInterval).IsNull();
+        await Assert.That(taskManager.RepeatCount).IsEqualTo(-1);
+    }
+
+    private sealed class RecordingTaskManager : ITaskManager
+    {
+        public int ScheduleCallCount { get; private set; }
+        public TimeSpan? StartDelay { get; private set; }
+        public TimeSpan? RepeatInterval { get; private set; }
+        public int RepeatCount { get; private set; }
+
+        public void Initialize() { }
+        public void Start() { }
+        public void Stop() { }
+        public bool Cancel(AAEmu.Game.Models.Tasks.Task task) => false;
+        public bool CronSchedule(AAEmu.Game.Models.Tasks.Task task, string cronExpression, TimeSpan? startDelay = null, int count = -1) => true;
+        public bool Schedule(AAEmu.Game.Models.Tasks.Task task, TimeSpan? startTime = null, TimeSpan? repeatInterval = null, int count = -1)
+        {
+            ScheduleCallCount++;
+            StartDelay = startTime;
+            RepeatInterval = repeatInterval;
+            RepeatCount = count;
+            return true;
+        }
+    }
     #endregion
 
     #region GetTemplate Tests
