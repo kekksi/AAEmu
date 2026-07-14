@@ -119,8 +119,13 @@ public class DuelManager : Singleton<DuelManager>, IDuelManager
     private void RestoreFaction(Unit owner)
     {
         // restore the fraction
-        owner.SetFaction(SaveFactions[owner.Id]);
-        SaveFactions.Remove(owner.Id);
+        if (!SaveFactions.Remove(owner.Id, out var faction))
+        {
+            Logger.Warn($"Duel cleanup: no saved faction for {owner.Id}");
+            return;
+        }
+
+        owner.SetFaction(faction);
     }
 
     public void DuelStart(uint id)
@@ -144,8 +149,19 @@ public class DuelManager : Singleton<DuelManager>, IDuelManager
             duel.DuelEndTimerTask = new DuelEndTimerTask(duel, duel.Challenger.Id);
             TaskManager.Instance.Schedule(duel.DuelEndTimerTask, TimeSpan.FromMinutes(DuelDurationTime));
 
-            // запустим проверку на дистанцию
-            _ = DuelDistanceСheck(duel.Challenger.Id);
+            // Start the range check. If either duellist was already outside the
+            // surrender radius when the duel began, no follow-up task would have
+            // been scheduled and the duel could never end by range.
+            var distance = DuelDistanceСheck(duel.Challenger.Id);
+            switch (distance)
+            {
+                case DuelDistance.ChallengerFar:
+                    DuelStop(duel.Challenger.Id, DuelDetType.Surrender, duel.Challenger.Id);
+                    return;
+                case DuelDistance.ChallengedFar:
+                    DuelStop(duel.Challenger.Id, DuelDetType.Surrender, duel.Challenged.Id);
+                    return;
+            }
 
             // запустим проверку на количество жизни
             _ = DuelResultСheck(duel.Challenger.Id);
@@ -195,6 +211,18 @@ public class DuelManager : Singleton<DuelManager>, IDuelManager
             {
                 _ = duel.DuelEndTimerTask.Cancel();
                 duel.DuelEndTimerTask = null;
+            }
+
+            if (duel.DuelDistanceСheckTask != null)
+            {
+                _ = duel.DuelDistanceСheckTask.Cancel();
+                duel.DuelDistanceСheckTask = null;
+            }
+
+            if (duel.DuelResultСheckTask != null)
+            {
+                _ = duel.DuelResultСheckTask.Cancel();
+                duel.DuelResultСheckTask = null;
             }
 
             DuelRemove(duel);
