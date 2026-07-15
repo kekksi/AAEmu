@@ -129,6 +129,10 @@ public class CharacterQuests(Character owner)
         // Execute the first Step
         _ = quest.RunCurrentStep(); // We don't need the return value here
 
+        // SCQuestContextStarted/Updated advance the active dialogue, but a full list
+        // refresh is also required for the quest journal to show a newly accepted quest.
+        Send();
+
         quest.QuestInitialized();
         return true;
     }
