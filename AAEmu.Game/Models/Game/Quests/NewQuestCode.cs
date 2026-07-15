@@ -181,12 +181,19 @@ public partial class Quest
         // Set new Value
         _step = value;
 
-        // Reset active component (used by packet only) 
-        ComponentId = 0;
-
         // Initialize Acts for this Step (if any)
         if (QuestSteps.TryGetValue(value, out var questSteps))
+        {
+            // The client uses the component id in SCQuestContextUpdated to leave the
+            // NPC dialogue and enter the new quest step. Keeping it at zero until an
+            // objective is completed leaves the client in the previous dialogue state.
+            ComponentId = questSteps.Components.Values.FirstOrDefault()?.Template.Id ?? 0;
             questSteps.InitializeStep();
+        }
+        else
+        {
+            ComponentId = 0;
+        }
 
         // Trigger OnQuestStepChanged event, even if this step is not available
         Owner?.Events?.OnQuestStepChanged(Owner, new OnQuestStepChangedArgs { QuestId = TemplateId, Step = value });

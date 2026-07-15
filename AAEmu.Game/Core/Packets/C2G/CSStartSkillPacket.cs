@@ -61,7 +61,14 @@ public class CSStartSkillPacket() : GamePacket(CSOffsets.CSStartSkillPacket, 1)
             Connection.ActiveChar.LastPacketActivityTime = DateTime.UtcNow;
         var world = Connection.ActiveChar?.ParentWorld ?? WorldManager.Instance.GetWorld(WorldManager.DefaultInstanceId);
         
-        Logger.Info($"StartSkill: Id {skillId}, flag {flag}, caster={skillCaster.ObjId}, target={skillCastTarget.ObjId}");
+        Logger.Trace($"StartSkill: Id {skillId}, flag {flag}, caster={skillCaster.ObjId}, target={skillCastTarget.ObjId}");
+
+        // Null-guard: unknown/missing skill template would crash (new Skill(null) derefs template.Id). BUGS-1.2 fix.
+        if (SkillManager.Instance.GetSkillTemplate(skillId) == null)
+        {
+            Logger.Warn($"StartSkill: skillId {skillId} has no template, ignoring (caster={skillCaster.ObjId})");
+            return;
+        }
 
         var skillResult = SkillResult.Success;
         var skillResultErrorValue = 0u;
@@ -71,7 +78,7 @@ public class CSStartSkillPacket() : GamePacket(CSOffsets.CSStartSkillPacket, 1)
         {
             var unit = world.GetUnit(scu.ObjId);
             if (unit is Character character)
-                Logger.Info($"{character.Name}:{character.ObjId} is using skill={skillId}");
+                Logger.Trace($"{character.Name}:{character.ObjId} is using skill={skillId}");
         }
 
         if (skillCaster is SkillCasterMount scm)
