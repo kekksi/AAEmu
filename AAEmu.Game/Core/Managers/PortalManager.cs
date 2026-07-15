@@ -462,7 +462,20 @@ public class PortalManager(ILocalizationManager localizationManager, IWorldManag
             if (districts.Count > 0)
             {
                 var factions = districts.Select(d => d.FactionId).Distinct().ToList();
-                if (factions.Count > 0 && !factions.Contains(character.Faction.MotherId) && !factions.Contains(character.Faction.Id))
+                // Return points are tagged per race-faction, but graveyards are shared across an
+                // alliance. Match by exact faction OR by shared alliance, so army/sub factions
+                // (e.g. 159 Red Army, 160 Blue Army) and cross-race players still find a return
+                // point instead of respawning on the spot where they died.
+                var playerAlliance = character.Faction.MotherId != 0 ? character.Faction.MotherId : character.Faction.Id;
+                var factionMatch = factions.Contains(character.Faction.MotherId)
+                    || factions.Contains(character.Faction.Id)
+                    || factions.Any(f =>
+                    {
+                        var rf = FactionManager.Instance.GetFaction(f);
+                        var rfAlliance = rf != null && rf.MotherId != 0 ? rf.MotherId : f;
+                        return rfAlliance == playerAlliance;
+                    });
+                if (factions.Count > 0 && !factionMatch)
                 {
                     continue;
                 }
