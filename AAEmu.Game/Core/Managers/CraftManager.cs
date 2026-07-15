@@ -122,4 +122,9 @@ public class CraftManager : Singleton<CraftManager>, ICraftManager
     {
         return _crafts[craftId];
     }
+
+    public bool TryGetCraftById(uint craftId, out Craft craft)
+    {
+        return _crafts.TryGetValue(craftId, out craft);
+    }
 }

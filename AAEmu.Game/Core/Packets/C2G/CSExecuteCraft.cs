@@ -1,6 +1,7 @@
 ﻿using AAEmu.Commons.Network;
 using AAEmu.Game.Core.Managers;
 using AAEmu.Game.Core.Network.Game;
+using AAEmu.Game.Models.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
@@ -14,8 +15,18 @@ public class CSExecuteCraft() : GamePacket(CSOffsets.CSExecuteCraft, 1)
 
         Logger.Debug("CSExecuteCraft, craftId : {0} , objId : {1}, count : {2}", craftId, objId, count);
 
-        var craft = CraftManager.Instance.GetCraftById(craftId);
         var character = Connection.ActiveChar;
+
+        if (character == null)
+            return;
+
+        if (count <= 0 || !CraftManager.Instance.TryGetCraftById(craftId, out var craft))
+        {
+            Logger.Warn("Rejected craft request: craftId {0}, objId {1}, count {2}", craftId, objId, count);
+            character.SendErrorMessage(ErrorMessageType.CraftInvalidCraftType);
+            return;
+        }
+
         character.Craft.Craft(craft, count, objId);
     }
 }

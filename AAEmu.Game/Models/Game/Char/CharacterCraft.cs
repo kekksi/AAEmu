@@ -10,11 +10,14 @@ using AAEmu.Game.Models.Game.Items.Actions;
 using AAEmu.Game.Models.Game.Items.Templates;
 using AAEmu.Game.Models.Game.Skills;
 using AAEmu.Game.Models.Tasks.Skills;
+using NLog;
 
 namespace AAEmu.Game.Models.Game.Char;
 
 public class CharacterCraft(Character owner)
 {
+    private static Logger Logger { get; } = LogManager.GetCurrentClassLogger();
+
     private int Count { get; set; }
     private Craft CurrentCraft { get; set; }
     /// <summary>
@@ -27,6 +30,12 @@ public class CharacterCraft(Character owner)
 
     public void Craft(Craft craft, int count, uint doodadId)
     {
+        if (craft == null || count <= 0)
+        {
+            Owner.SendErrorMessage(ErrorMessageType.CraftInvalidCraftType);
+            return;
+        }
+
         CurrentCraft = craft;
         Count = count;
         DoodadId = doodadId;
@@ -109,7 +118,16 @@ public class CharacterCraft(Character owner)
         var target = SkillCastTarget.GetByType(SkillCastTargetType.Doodad);
         target.ObjId = doodadId;
 
-        var skill = new Skill(SkillManager.Instance.GetSkillTemplate(craft.SkillId));
+        var skillTemplate = SkillManager.Instance.GetSkillTemplate(craft.SkillId);
+        if (skillTemplate == null)
+        {
+            Logger.Warn("Craft {0} has no skill template {1}", craft.Id, craft.SkillId);
+            Owner.SendErrorMessage(ErrorMessageType.CraftInvalidCraftType);
+            CancelCraft();
+            return;
+        }
+
+        var skill = new Skill(skillTemplate);
         ConsumeLaborPower = skill.Template.ConsumeLaborPower;
         var speedMultiplier = 1f;
         if (craft.AcId > 0)
