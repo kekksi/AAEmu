@@ -22,7 +22,12 @@ public class Charge : SpecialEffectAction
             var buff = caster.Buffs.GetEffectFromBuffId((uint)buffId);
             var template = SkillManager.Instance.GetBuffTemplate((uint)buffId);
 
-            var chargeDelta = Random.Shared.Next(minCharge, maxCharge);
+            // Some skills (e.g. Concussive Arrow) use a fixed charge amount and
+            // therefore provide identical minimum and maximum values. Random.Next
+            // requires an exclusive upper bound, so that case must not be sampled.
+            var chargeDelta = minCharge == maxCharge
+                ? minCharge
+                : Random.Shared.Next(Math.Min(minCharge, maxCharge), Math.Max(minCharge, maxCharge));
             var oldCharge = buff?.Charge ?? 0;
 
             var newEffect =
