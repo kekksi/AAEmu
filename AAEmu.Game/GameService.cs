@@ -86,6 +86,7 @@ public sealed class GameService : IHostedService, IDisposable
         // --- Stage 3: Post-load special steps ---
         GameDataManager.Instance.PostLoadGameData();
         CashShopManager.Instance.EnabledShop();
+        TimedRewardsManager.Instance.Initialize(); // start credit/loyalty/labor reward tick
 
         // --- Scripts ---
         if (AppConfiguration.Instance.Scripts.LoadStrategy == ScriptsConfig.LoadStrategyType.Compilation)

@@ -69,7 +69,10 @@ public class SCUnitStatePacket : GamePacket
     {
         #region NetUnit
         stream.WriteBc(_unit.ObjId);
-        stream.Write(_unit.Name);
+        var _dispName = _unit.Name;
+        if (_unit is AAEmu.Game.Models.Game.Char.Character _gmc && _gmc.AccessLevel >= 50)
+            _dispName = "[GM] " + _unit.Name;
+        stream.Write(_dispName);
         stream.Write((byte)_baseUnitType);
 
         // Cache character
