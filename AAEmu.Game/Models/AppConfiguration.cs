@@ -12,9 +12,25 @@ public partial class AppConfiguration
 {
     private static readonly AppConfiguration s_default = new();
 
-    public static AppConfiguration Instance =>
-        SingletonContainer.ServiceProvider?.GetService<IOptions<AppConfiguration>>()?.Value
-        ?? s_default;
+    public static AppConfiguration Instance
+    {
+        get
+        {
+            // During shutdown/restart the DI ServiceProvider is disposed; GetService then
+            // throws ObjectDisposedException instead of returning null, which crashed
+            // background threads (e.g. PhysicsThread). Fall back to defaults so the server
+            // can stop cleanly without spamming errors.
+            try
+            {
+                return SingletonContainer.ServiceProvider?.GetService<IOptions<AppConfiguration>>()?.Value
+                       ?? s_default;
+            }
+            catch (System.ObjectDisposedException)
+            {
+                return s_default;
+            }
+        }
+    }
 
     public byte Id { get; set; }
     public byte[] AdditionalesId { get; set; } = [];
