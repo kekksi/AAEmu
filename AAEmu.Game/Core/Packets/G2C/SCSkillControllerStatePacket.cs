@@ -12,9 +12,12 @@ public class SCSkillControllerStatePacket(uint objId, byte scType, float len, bo
         SkillControllerPacketDebug.LogScSkillControllerState(objId, scType, len, teared, cutouted);
         stream.WriteBc(objId);
         stream.Write(scType);
-        stream.Write(len);
-        stream.Write(teared);
-        stream.Write(cutouted);
+        if (scType == 0)
+        {
+            stream.Write(len);
+            stream.Write(teared);
+            stream.Write(cutouted);
+        }
         return stream;
     }
 }
