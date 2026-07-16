@@ -17,9 +17,12 @@ public class Charge : SpecialEffectAction
     {
         if (caster is Character) { Logger.Debug("Special effects: Charge buffId {0}, minCharge {1}, maxCharge {2}, unused {3}", buffId, minCharge, maxCharge, unused); }
 
-        lock (caster.ChargeLock)
+        // Charges belong to the unit receiving the special effect. Source effects
+        // happen to target the caster, while target effects must store and update
+        // their charge on the affected unit.
+        lock (target.ChargeLock)
         {
-            var buff = caster.Buffs.GetEffectFromBuffId((uint)buffId);
+            var buff = target.Buffs.GetEffectFromBuffId((uint)buffId);
             var template = SkillManager.Instance.GetBuffTemplate((uint)buffId);
 
             // Some skills (e.g. Concussive Arrow) use a fixed charge amount and
@@ -36,7 +39,7 @@ public class Charge : SpecialEffectAction
                     Charge = Math.Min(chargeDelta, template.MaxCharge)
                 };
 
-            caster.Buffs.AddBuff(newEffect, buff?.Index ?? 0);
+            target.Buffs.AddBuff(newEffect, buff?.Index ?? 0);
 
             var newCharge = Math.Min(oldCharge + chargeDelta, template.MaxCharge);
             newEffect.Charge = newCharge;
