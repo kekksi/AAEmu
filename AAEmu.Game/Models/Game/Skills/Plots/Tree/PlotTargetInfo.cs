@@ -167,7 +167,7 @@ public class PlotTargetInfo
         posUnit.Transform.ZoneId = PreviousTarget.Transform.ZoneId;
         posUnit.Transform.InstanceId = PreviousTarget.Transform.InstanceId;
         posUnit.Transform.Local.SetZRotation(((float)Random.Shared.Next(-180, 180)).DegToRad());
-        posUnit.Transform.Local.AddDistanceToFront(args.Distance / 1000f);
+        posUnit.Transform.Local.AddDistanceToFront(Random.Shared.NextSingle() * args.Distance / 1000f);
         // TODO: Make this use geo data, need to check if we can grab parent world from here
         posUnit.Transform.Local.SetHeight(Math.Max(PreviousTarget.Transform.World.Position.Z + args.HeightOffset / 1000f, WorldManager.Instance.GetHeight(posUnit.Transform)));
 
