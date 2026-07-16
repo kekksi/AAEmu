@@ -149,6 +149,14 @@ public class CSMoveUnitPacket() : GamePacket(CSOffsets.CSMoveUnitPacket, 1)
                         // TODO : check target has Telekinesis buff if target is a player
                         // Just forward it to the packet, not safe for exploits/hacking
                         // We moved
+                        if (player.ObjId == character.ObjId && player.IsAutoAttack &&
+                            (dmt.VelX != 0 || dmt.VelY != 0 || dmt.VelZ != 0))
+                        {
+                            // Movement is an explicit player action. Keep no stale auto
+                            // attack task alive, otherwise it continues sending attack
+                            // packets after the player has tried to move.
+                            player.StopAutoSkill(player);
+                        }
                         RemoveEffects(player, _moveType);
 
                         if (player.IsRiding)

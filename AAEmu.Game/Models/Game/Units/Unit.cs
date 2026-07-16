@@ -547,15 +547,11 @@ public class Unit : BaseUnit, IUnit
             return;
         }
 
-        character.AutoAttackTask.Cancelled = true;
-        // await character.AutoAttackTask.Cancel();
-        /*
+        var autoAttackTask = character.AutoAttackTask;
+        autoAttackTask.Cancelled = true;
+        autoAttackTask.Cancel();
         character.AutoAttackTask = null;
-        character.IsAutoAttack = false; // turned off auto attack
-        character.BroadcastPacket(new SCSkillEndedPacket(character.TlId), true);
-        character.BroadcastPacket(new SCSkillStoppedPacket(character.ObjId, character.SkillId), true);
-        TlIdManager.Instance.ReleaseId(character.TlId);
-        */
+        character.IsAutoAttack = false;
     }
 
     public void StartAutoSkill(Skill skill)

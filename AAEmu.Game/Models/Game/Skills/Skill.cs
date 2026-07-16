@@ -853,8 +853,21 @@ public class Skill
         }
         else
         {
-            ApplyEffects(caster, casterCaster, target, targetCaster, skillObject);
-            EndSkill(caster);
+            try
+            {
+                ApplyEffects(caster, casterCaster, target, targetCaster, skillObject);
+            }
+            catch (Exception e)
+            {
+                // An immediate effect must not leave the player in a cast state
+                // when one malformed effect fails.
+                Logger.Error(e, "Failed to apply immediate effects for skill {0} (tlId {1}, caster {2})",
+                    Template.Id, TlId, caster.ObjId);
+            }
+            finally
+            {
+                EndSkill(caster);
+            }
         }
     }
 
