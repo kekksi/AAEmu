@@ -6,6 +6,7 @@ using AAEmu.Game.Core.Packets.G2C;
 using AAEmu.Game.GameData;
 using AAEmu.Game.Models.Game.Char;
 using AAEmu.Game.Models.Game.DoodadObj.Static;
+using AAEmu.Game.Models.Game.Items;
 using AAEmu.Game.Models.Game.Items.Templates;
 using AAEmu.Game.Models.Game.Skills;
 using AAEmu.Game.Models.Game.Skills.Static;
@@ -131,7 +132,19 @@ public class CSStartSkillPacket() : GamePacket(CSOffsets.CSStartSkillPacket, 1)
         else if (SkillManager.Instance.IsDefaultSkill(skillId) || SkillManager.Instance.IsCommonSkill(skillId) && skillCaster is not SkillItem)
         {
             // Is it a common skill?
-            skill = new Skill(SkillManager.Instance.GetSkillTemplate(skillId)); // TODO: переделать / rewrite ...
+            var skillTemplate = SkillManager.Instance.GetSkillTemplate(skillId);
+
+            // Skill 3 is the offhand swing. It must never become the primary
+            // auto-attack when the client requests it while a shield is equipped;
+            // otherwise the shield is used as the player's basic melee weapon.
+            if (skillId == 3 && Connection.ActiveChar.Equipment
+                    .GetItemBySlot((int)EquipmentItemSlot.Offhand)?.Template is WeaponTemplate
+                    { HoldableTemplate: { SlotTypeId: (uint)EquipmentItemSlotType.Shield } })
+            {
+                skillTemplate = SkillManager.Instance.GetSkillTemplate(2);
+            }
+
+            skill = new Skill(skillTemplate); // TODO: переделать / rewrite ...
             skillResult = skill.Use(Connection.ActiveChar, skillCaster, skillCastTarget, skillObject, false, out skillResultErrorValue);
             if (skillResult == SkillResult.Success && skillId < 5000 && skillCaster.ObjId == Connection.ActiveChar.ObjId)
             {
