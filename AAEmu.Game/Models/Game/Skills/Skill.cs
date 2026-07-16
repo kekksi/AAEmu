@@ -925,8 +925,11 @@ public class Skill
         if (Template.TargetAreaRadius > 0)
         {
             var units = WorldManager.GetAround<BaseUnit>(targetSelf, Template.TargetAreaRadius, true);
-            if (Template.TargetSelection == SkillTargetSelection.Source)
-                units.Add(targetSelf); // Add main target as well
+            // GetAround deliberately excludes its center object. For AoE skills
+            // centered on either the caster or an explicit target, that center
+            // must still receive the effect alongside nearby units.
+            if (Template.TargetSelection is SkillTargetSelection.Source or SkillTargetSelection.Target)
+                units.Add(targetSelf);
             units = FilterAoeUnits(caster, units).ToList();
 
             possibleTargets.AddRange(units);
