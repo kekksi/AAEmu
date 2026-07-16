@@ -23,7 +23,7 @@ public class GrantSkill : ICommand
 
     public string GetCommandHelpText()
     {
-        return "Force-grants a skill to the target (or self). The skill appears in the K skill window, drag it to a hotbar slot. Bypasses tree/skill-point checks (for 2.0 skills with no 1.2 tree node).";
+        return "Force-grants a skill to the target (or self) and places it on the first free hotbar slot. For 2.0 skills that have no 1.2 skill-tree node.";
     }
 
     public void Execute(Character character, string[] args, IMessageOutput messageOutput)
@@ -54,15 +54,33 @@ public class GrantSkill : ICommand
             return;
         }
 
-        if (targetPlayer.Skills.Skills.TryGetValue(skillId, out var existing))
+        if (!targetPlayer.Skills.Skills.TryGetValue(skillId, out var skill))
         {
-            targetPlayer.SendPacket(new SCSkillLearnedPacket(existing));
-            CommandManager.SendNormalText(this, messageOutput, $"{targetPlayer.Name} already knows skill {skillId} - resent to client.");
-            return;
+            targetPlayer.Skills.AddSkill(template, 1, true);
+            targetPlayer.Skills.Skills.TryGetValue(skillId, out skill);
+        }
+        else
+        {
+            targetPlayer.SendPacket(new SCSkillLearnedPacket(skill));
         }
 
-        targetPlayer.Skills.AddSkill(template, 1, true);
-        CommandManager.SendNormalText(this, messageOutput, $"Granted skill {skillId} to {targetPlayer.Name}. Open K, drag it to a hotbar slot.");
+        // place on first free hotbar slot + push to client
+        var placed = -1;
+        if (targetPlayer.Slots != null)
+        {
+            for (byte s = 0; s < Character.MaxActionSlots; s++)
+            {
+                if (targetPlayer.Slots[s] != null && targetPlayer.Slots[s].Type == ActionSlotType.None)
+                {
+                    targetPlayer.SetAction(s, ActionSlotType.Spell, skillId);
+                    placed = s;
+                    break;
+                }
+            }
+            targetPlayer.SendPacket(new SCActionSlotsPacket(targetPlayer.Slots));
+        }
+
+        CommandManager.SendNormalText(this, messageOutput, $"Granted skill {skillId} to {targetPlayer.Name}" + (placed >= 0 ? $", placed on hotbar slot {placed}." : " (no free hotbar slot)."));
         if (character.Id != targetPlayer.Id)
             targetPlayer.SendMessage($"[GM] {character.Name} granted you skill {skillId}.");
     }
