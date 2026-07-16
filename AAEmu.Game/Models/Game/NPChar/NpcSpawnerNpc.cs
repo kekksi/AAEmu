@@ -96,8 +96,19 @@ public class NpcSpawnerNpc : Spawner<Npc>
 
         if (!npc.CanFly)
         {
-            var newZ = npcSpawner.ParentWorld.Template.GeoData.GetHeight(npcSpawner.Position.AsPositionVector());// WorldManager.Instance.GetHeight(npcSpawner.Position.ZoneId, npcSpawner.Position.X, npcSpawner.Position.Y, npcSpawner.Position.Z);
-            if (Math.Abs(npcSpawner.Position.Z - newZ) < 1f)
+            var newZ = npcSpawner.ParentWorld.Template.GeoData.GetHeight(npcSpawner.Position.AsPositionVector());
+            var heightAboveGround = npcSpawner.Position.Z - newZ;
+            // Snap non-flying NPCs down onto the terrain when they spawn floating above it.
+            // The old code only corrected sub-1m differences, so NPCs whose data Z was several
+            // metres above the heightmap stayed floating (bug #1425). Now: snap when the NPC is
+            // ABOVE ground within a sane range and the heightmap returned a plausible value.
+            // Leaves cave NPCs (below ground), NPCs on tall structures (far above), and areas
+            // with no heightmap data (newZ ~0) untouched.
+            if (newZ > 50f && heightAboveGround > 0f && heightAboveGround < 30f)
+            {
+                npcSpawner.Position.Z = newZ;
+            }
+            else if (Math.Abs(heightAboveGround) < 1f)
             {
                 npcSpawner.Position.Z = newZ;
             }
