@@ -103,14 +103,18 @@ public class CharacterMails
 
         // With attachments in place, we can calculate the send fee
         var mailFee = mail.GetMailFee();
-        if (mailFee + money0 > Self.Money)
+        var totalCost = (long)mailFee + money0;
+        if (!Self.TrySpendMoney(SlotType.Inventory, totalCost))
         {
             // Self.SendErrorMessage(ErrorMessageType.MailNotEnoughMoney);
             return MailResult.InsufficientCoins;
         }
 
         if (!mail.FinalizeAttachments())
+        {
+            Self.TryAddMoney(SlotType.Inventory, totalCost);
             return MailResult.InvalidSlot; // Should never fail at this point
+        }
 
         // Add delay if not a normal snail mail
         if (mailType == MailType.Normal)
@@ -120,12 +124,11 @@ public class CharacterMails
         if (mail.Send())
         {
             Self.SendPacket(new SCMailSentPacket(mail.Header, itemSlots.ToArray()));
-            // Take the fee
-            Self.SubtractMoney(SlotType.Inventory, mailFee + money0);
             return MailResult.Success;
         }
         else
         {
+            Self.TryAddMoney(SlotType.Inventory, totalCost);
             return MailResult.MailErrorOccurred;
         }
     }
@@ -150,10 +153,12 @@ public class CharacterMails
             }
             if (thisMail.Body.CopperCoins > 0 && takeMoney)
             {
-                Self.ChangeMoney(SlotType.Inventory, thisMail.Body.CopperCoins);
-                thisMail.Body.CopperCoins = 0;
-                thisMail.Header.Attachments -= 1;
-                tookMoney = true;
+                if (Self.TryAddMoney(SlotType.Inventory, thisMail.Body.CopperCoins))
+                {
+                    thisMail.Body.CopperCoins = 0;
+                    thisMail.Header.Attachments -= 1;
+                    tookMoney = true;
+                }
             }
 
             var itemSlotList = new List<ItemIdAndLocation>();

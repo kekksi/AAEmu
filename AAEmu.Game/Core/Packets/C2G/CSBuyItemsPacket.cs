@@ -57,9 +57,9 @@ public class CSBuyItemsPacket() : GamePacket(CSOffsets.CSBuyItemsPacket, 1)
             }
         }
 
-        var money = 0;
-        var honorPoints = 0;
-        var vocationBadges = 0;
+        long money = 0;
+        long honorPoints = 0;
+        long vocationBadges = 0;
 
         // Get list of items to buy from the shop
         var itemsBuy = new List<(uint itemId, byte itemGrade, int itemCount)>();
@@ -69,6 +69,8 @@ public class CSBuyItemsPacket() : GamePacket(CSOffsets.CSBuyItemsPacket, 1)
             var grade = stream.ReadByte();
             var count = stream.ReadInt32();
             var currency = (ShopCurrencyType)stream.ReadByte();
+            if (count <= 0)
+                return;
 
             // If using a NPC shop, check if the NPC is selling the specified item
             if (npcObjId != 0 && (pack == null || !pack.SellsItem(itemId)))
@@ -84,11 +86,11 @@ public class CSBuyItemsPacket() : GamePacket(CSOffsets.CSBuyItemsPacket, 1)
             var template = ItemManager.Instance.GetTemplate(itemId);
 
             if (currency == ShopCurrencyType.Money)
-                money += template.Price * count;
+                money += (long)template.Price * count;
             else if (currency == ShopCurrencyType.Honor)
-                honorPoints += template.HonorPrice * count;
+                honorPoints += (long)template.HonorPrice * count;
             else if (currency == ShopCurrencyType.VocationBadges)
-                vocationBadges += template.LivingPointPrice * count;
+                vocationBadges += (long)template.LivingPointPrice * count;
             else
             {
                 Logger.Error("Unknown currency type");
@@ -110,15 +112,20 @@ public class CSBuyItemsPacket() : GamePacket(CSOffsets.CSBuyItemsPacket, 1)
             if (item == null)
                 continue;
             itemsBuyBack.Add(item, index);
-            money += (int)(item.Template.Refund * ItemManager.Instance.GetGradeTemplate(item.Grade).RefundMultiplier / 100f) *
+            money += (long)(item.Template.Refund * ItemManager.Instance.GetGradeTemplate(item.Grade).RefundMultiplier / 100f) *
                      item.Count;
         }
 
         var useAAPoint = stream.ReadBoolean();
 
-        if (money > Connection.ActiveChar.Money &&
-            honorPoints > Connection.ActiveChar.HonorPoint &&
-            vocationBadges > Connection.ActiveChar.VocationPoint)
+        if (money < 0 || honorPoints < 0 || vocationBadges < 0 ||
+            money > Connection.ActiveChar.Money ||
+            honorPoints > Connection.ActiveChar.HonorPoint ||
+            vocationBadges > Connection.ActiveChar.VocationPoint ||
+            honorPoints > int.MaxValue || vocationBadges > int.MaxValue)
+            return;
+
+        if (money > 0 && !Connection.ActiveChar.TrySpendMoney(SlotType.Inventory, money, ItemTaskType.StoreBuy))
             return;
 
         var tasks = new List<ItemTask>();
@@ -151,17 +158,12 @@ public class CSBuyItemsPacket() : GamePacket(CSOffsets.CSBuyItemsPacket, 1)
 
         if (honorPoints > 0)
         {
-            Connection.ActiveChar.ChangeGamePoints(GamePointKind.Honor, -honorPoints);
+            Connection.ActiveChar.ChangeGamePoints(GamePointKind.Honor, -(int)honorPoints);
         }
 
         if (vocationBadges > 0)
         {
-            Connection.ActiveChar.ChangeGamePoints(GamePointKind.Vocation, -vocationBadges);
-        }
-
-        if (money > 0)
-        {
-            Connection.ActiveChar.ChangeMoney(SlotType.Inventory, -money);
+            Connection.ActiveChar.ChangeGamePoints(GamePointKind.Vocation, -(int)vocationBadges);
         }
 
         Connection.SendPacket(new SCItemTaskSuccessPacket(ItemTaskType.StoreBuy, tasks, []));

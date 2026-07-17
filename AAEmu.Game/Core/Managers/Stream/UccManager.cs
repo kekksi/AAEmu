@@ -315,6 +315,10 @@ public class UccManager(IUccIdManager uccIdManager) : Singleton<UccManager>, IUc
 
     public void ConfirmDefaultUcc(StreamConnection connection)
     {
+        var character = connection.GameConnection.ActiveChar;
+        if (!character.TrySpendMoney(SlotType.Inventory, 50000))
+            return;
+
         var ucc = _uploadQueue[connection.Id];
         var id = uccIdManager.GetNextId();
 
@@ -334,10 +338,6 @@ public class UccManager(IUccIdManager uccIdManager) : Singleton<UccManager>, IUc
 #endif
 
         connection.SendPacket(new TCEmblemStreamRecvStatusPacket(EmblemStreamStatus.End));
-
-        var character = connection.GameConnection.ActiveChar;
-
-        connection.GameConnection.ActiveChar.ChangeMoney(SlotType.Inventory, -50000);
 
         var newItem = (UccItem)ItemManager.Instance.Create(Item.CrestInk, 1, 0, true); // Crest Ink
         newItem.UccId = id;

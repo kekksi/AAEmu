@@ -535,12 +535,12 @@ public class HousingManager(
         {
             // Pay in Gold
             // TODO: test house with actual gold tax
-            if (totalTaxAmountDue > connection.ActiveChar.Money)
+            if (!connection.ActiveChar.TrySpendMoney(SlotType.Inventory, totalTaxAmountDue,
+                    ItemTaskType.HouseCreation))
             {
                 connection.ActiveChar.SendErrorMessage(ErrorMessageType.MailNotEnoughMoneyToPayTaxes);
                 return;
             }
-            connection.ActiveChar.SubtractMoney(SlotType.Inventory, totalTaxAmountDue, ItemTaskType.HouseCreation);
         }
 
         if (connection.ActiveChar.Inventory.Bag.ConsumeItem(ItemTaskType.HouseBuilding, sourceDesignItem.TemplateId, 1, sourceDesignItem) <= 0)
@@ -1390,7 +1390,7 @@ public class HousingManager(
 
         // NOTE: check tax due maybe ?
 
-        if (!character.SubtractMoney(SlotType.Inventory, (int)house.SellPrice, ItemTaskType.BuyHouse))
+        if (!character.TrySpendMoney(SlotType.Inventory, (int)house.SellPrice, ItemTaskType.BuyHouse))
         {
             // Not enough money
             character.SendErrorMessage(ErrorMessageType.HouseCannotBuyAsNotEnoughMoney);

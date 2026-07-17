@@ -442,15 +442,11 @@ public class MailManager(IMailIdManager mailIdManager, INameManager nameManager,
         else
         {
             // use gold as payment
-            if (mail.Body.BillingAmount > character.Money)
+            if (!character.TrySpendMoney(SlotType.Inventory, mail.Body.BillingAmount))
             {
                 // Not enough gold
                 character.SendErrorMessage(ErrorMessageType.MailNotEnoughMoneyToPayTaxes);
                 return false;
-            }
-            else
-            {
-                character.SubtractMoney(SlotType.Inventory, mail.Body.BillingAmount);
             }
         }
 

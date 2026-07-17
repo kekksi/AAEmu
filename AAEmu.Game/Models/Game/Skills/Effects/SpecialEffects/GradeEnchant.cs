@@ -94,12 +94,6 @@ public class GradeEnchant : SpecialEffectAction
             return;
         }
 
-        if (character.Money < cost)
-        {
-            Reject(character, skill, ErrorMessageType.NotEnoughMoney, $"needs {cost} copper, has {character.Money}");
-            return;
-        }
-
         if (!character.Inventory.CheckItems(SlotType.Inventory, scroll.ItemTemplateId, 1))
         {
             Reject(character, skill, ErrorMessageType.NotEnoughRequiredItem, $"scroll {scroll.ItemTemplateId} is not in inventory");
@@ -139,6 +133,12 @@ public class GradeEnchant : SpecialEffectAction
             // tasksRemove.Add(InventoryHelper.GetTaskAndRemoveItem(character, charmItem, 1));
         }
 
+        if (!character.TrySpendMoney(SlotType.Inventory, cost, ItemTaskType.GradeEnchant))
+        {
+            Reject(character, skill, ErrorMessageType.NotEnoughMoney, $"needs {cost} copper, has {character.Money}");
+            return;
+        }
+
         // All seems to be in order, roll item, consume items and send the results
         var result = RollRegrade(gradeTemplate, item, isLucky, useCharm, charmInfo);
         if (result == GradeEnchantResult.Break)
@@ -153,7 +153,6 @@ public class GradeEnchant : SpecialEffectAction
         }
 
         // Consume
-        character.SubtractMoney(SlotType.Inventory, cost);
         // TODO: Handled by skill already, do more tests
         // character.Inventory.PlayerInventory.ConsumeItem(ItemTaskType.GradeEnchant, scroll.ItemTemplateId, 1, character.Inventory.GetItemById(scroll.ItemId));
         if (useCharm)

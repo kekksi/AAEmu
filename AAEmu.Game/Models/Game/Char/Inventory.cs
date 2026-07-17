@@ -863,23 +863,17 @@ public class Inventory
         if (index == -1)
             return;
         var expand = expands[index];
-        if (expand.Price != 0 && Owner.Money < expand.Price)
-        {
-            Logger.Warn("No Money for expand!");
-            return;
-        }
-
         if (expand.ItemId != 0 && expand.ItemCount != 0 && !CheckItems(SlotType.Inventory, expand.ItemId, expand.ItemCount))
         {
             Logger.Warn("Item or Count not fount.");
             return;
         }
 
-        var tasks = new List<ItemTask>();
-        if (expand.Price != 0)
+        if (expand.Price != 0 && !Owner.TrySpendMoney(SlotType.Inventory, expand.Price,
+                isBank ? ItemTaskType.ExpandBank : ItemTaskType.ExpandBag))
         {
-            Owner.Money -= expand.Price;
-            tasks.Add(new MoneyChange(-expand.Price));
+            Logger.Warn("No Money for expand!");
+            return;
         }
 
         if (expand.ItemId != 0 && expand.ItemCount != 0)

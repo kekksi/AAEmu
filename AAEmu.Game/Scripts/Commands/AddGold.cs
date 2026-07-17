@@ -2,6 +2,7 @@
 using AAEmu.Game.Core.Packets.G2C;
 using AAEmu.Game.Models.Game;
 using AAEmu.Game.Models.Game.Char;
+using AAEmu.Game.Models.Game.Items;
 using AAEmu.Game.Models.Game.Items.Actions;
 using AAEmu.Game.Core.Managers.World;
 using AAEmu.Game.Utils.Scripts;
@@ -56,13 +57,13 @@ public class AddGold : ICommand
             argCopper = amount;
         }
 
-        var argTotal = argCopper + argSilver * 100 + argGold * 10000;
+        var argTotal = (long)argCopper + (long)argSilver * 100 + (long)argGold * 10000;
 
-        if (argTotal != 0)
+        var changed = argTotal != 0 && (argTotal > 0
+            ? targetPlayer.TryAddMoney(SlotType.Inventory, argTotal, ItemTaskType.AutoLootDoodadItem)
+            : targetPlayer.TrySpendMoney(SlotType.Inventory, -argTotal, ItemTaskType.AutoLootDoodadItem));
+        if (argTotal != 0 && changed)
         {
-            targetPlayer.Money += argTotal;
-            targetPlayer.SendPacket(new SCItemTaskSuccessPacket(ItemTaskType.AutoLootDoodadItem,
-                [new MoneyChange(argTotal)], []));
             if (character.Id != targetPlayer.Id)
             {
                 CommandManager.SendNormalText(this, messageOutput,
@@ -72,7 +73,7 @@ public class AddGold : ICommand
         }
         else
         {
-            CommandManager.SendErrorText(this, messageOutput, "No valid amount provided ...");
+            CommandManager.SendErrorText(this, messageOutput, "No valid or affordable amount provided ...");
         }
     }
 }

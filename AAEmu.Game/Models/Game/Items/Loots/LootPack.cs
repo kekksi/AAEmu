@@ -560,7 +560,7 @@ public class LootPack
         {
             //We have coins to give out.
             // Logger.Debug("{Category} - {Character} got {Amount} from lootpack {Lootpack}");
-            character.AddMoney(SlotType.Inventory, coinCount, taskType);
+            character.TryAddMoney(SlotType.Inventory, coinCount, taskType);
         }
 
         return true;

@@ -3,6 +3,7 @@ using AAEmu.Game.Core.Managers;
 using AAEmu.Game.Core.Managers.World;
 using AAEmu.Game.Core.Packets.G2C;
 using AAEmu.Game.Models.Game.Char;
+using AAEmu.Game.Models.Game.Items;
 using AAEmu.Game.Models.Game.Items.Actions;
 using AAEmu.Game.Utils.Scripts;
 using AAEmu.Game.Utils.Scripts.SubCommands;
@@ -70,13 +71,14 @@ public class GoldSetSubCommand : SubCommandBase
             copperAmount = parameter1;
         }
 
-        var totalAmount = copperAmount * multiplier + silverAmount * 100 * multiplier + goldAmount * 10000 * multiplier;
+        var totalAmount = (long)copperAmount * multiplier + (long)silverAmount * 100 * multiplier +
+                          (long)goldAmount * 10000 * multiplier;
 
-        if (totalAmount != 0)
+        var changed = totalAmount != 0 && (totalAmount > 0
+            ? targetCharacter.TryAddMoney(SlotType.Inventory, totalAmount, ItemTaskType.AutoLootDoodadItem)
+            : targetCharacter.TrySpendMoney(SlotType.Inventory, -totalAmount, ItemTaskType.AutoLootDoodadItem));
+        if (totalAmount != 0 && changed)
         {
-            targetCharacter.Money += totalAmount;
-            targetCharacter.SendPacket(new SCItemTaskSuccessPacket(ItemTaskType.AutoLootDoodadItem,
-                [new MoneyChange(totalAmount)], []));
             SendMessage(messageOutput,
                 $"Changed {targetCharacter.Name}'s money by {goldAmount}g {silverAmount}s {copperAmount}c");
             if (selfCharacter.Id != targetCharacter.Id)
@@ -86,7 +88,7 @@ public class GoldSetSubCommand : SubCommandBase
         }
         else
         {
-            SendColorMessage(messageOutput, Color.Red, "No valid amount sum provided");
+            SendColorMessage(messageOutput, Color.Red, "No valid or affordable amount sum provided");
         }
     }
 }

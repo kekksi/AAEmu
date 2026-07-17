@@ -54,7 +54,7 @@ public class CSSellItemsPacket() : GamePacket(CSOffsets.CSSellItemsPacket, 1)
                      item.Count;
         }
 
-        Connection.ActiveChar.ChangeMoney(SlotType.Inventory, money);
+        Connection.ActiveChar.TryAddMoney(SlotType.Inventory, money, ItemTaskType.StoreSell);
         /*
         Connection.ActiveChar.Money += money;
         tasks.Add(new MoneyChange(money));

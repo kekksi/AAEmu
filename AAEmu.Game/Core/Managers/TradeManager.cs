@@ -157,7 +157,7 @@ public class TradeManager(ITradeIdManager tradeIdManager, IWorldManager worldMan
     public void AddMoney(Character character, int moneyAmount)
     {
         var tradeId = GetTradeId(character.ObjId);
-        if (tradeId != 0 && character.Money >= moneyAmount)
+        if (tradeId != 0 && moneyAmount >= 0 && character.Money >= moneyAmount)
         {
             var isOwnerWhoAdd = _trades[tradeId].OwnerObjId.Equals(character.ObjId);
             var owner = worldManager.GetCharacterByObjId(_trades[tradeId].OwnerObjId);
@@ -329,21 +329,24 @@ public class TradeManager(ITradeIdManager tradeIdManager, IWorldManager worldMan
         var tasksOwner = new List<ItemTask>();
         var tasksTarget = new List<ItemTask>();
 
+        if (!Character.TryExchangeMoney(owner, target, tradeInfo.OwnerMoneyPutup, tradeInfo.TargetMoneyPutup))
+        {
+            CancelTrade(owner.ObjId, 0, tradeId);
+            Logger.Error("Atomic money exchange failed for trade {0}", tradeId);
+            return;
+        }
+
         // Handle Money from Owner
         if (tradeInfo.OwnerMoneyPutup > 0)
         {
-            owner.Money -= tradeInfo.OwnerMoneyPutup;
             tasksOwner.Add(new MoneyChange(-tradeInfo.OwnerMoneyPutup));
-            target.Money += tradeInfo.OwnerMoneyPutup;
             tasksTarget.Add(new MoneyChange(tradeInfo.OwnerMoneyPutup));
         }
 
         // Handle Money from Target
         if (tradeInfo.TargetMoneyPutup > 0)
         {
-            owner.Money += tradeInfo.TargetMoneyPutup;
             tasksOwner.Add(new MoneyChange(tradeInfo.TargetMoneyPutup));
-            target.Money -= tradeInfo.TargetMoneyPutup;
             tasksTarget.Add(new MoneyChange(-tradeInfo.TargetMoneyPutup));
         }
 

@@ -46,6 +46,10 @@ public partial class Character : Unit, ICharacter
     public static Dictionary<uint, uint> UsedCharacterObjIds { get; } = [];
 
     private readonly Dictionary<ushort, string> _options;
+    private readonly object _moneyLock = new();
+    private static readonly object MoneyExchangeLock = new();
+    private long _money;
+    private long _money2;
 
     public List<IDisposable> Subscribers { get; set; }
     public override CharacterEvents Events { get; } = new();
@@ -104,8 +108,32 @@ public partial class Character : Unit, ICharacter
     public DateTime RezTime { get; set; }
     public int RezPenaltyDuration { get; set; }
     public DateTime LeaveTime { get; set; }
-    public long Money { get; set; }
-    public long Money2 { get; set; }
+    public long Money
+    {
+        get
+        {
+            lock (_moneyLock)
+                return _money;
+        }
+        set
+        {
+            lock (_moneyLock)
+                _money = Math.Max(0, value);
+        }
+    }
+    public long Money2
+    {
+        get
+        {
+            lock (_moneyLock)
+                return _money2;
+        }
+        set
+        {
+            lock (_moneyLock)
+                _money2 = Math.Max(0, value);
+        }
+    }
     public int HonorPoint { get; set; }
     public int VocationPoint { get; set; }
 
@@ -1505,60 +1533,184 @@ public partial class Character : Unit, ICharacter
         }
     }
 
-    public bool ChangeMoney(SlotType moneyLocation, int amount, ItemTaskType itemTaskType = ItemTaskType.DepositMoney) => ChangeMoney(SlotType.None, moneyLocation, amount, itemTaskType);
+    public bool ChangeMoney(SlotType moneyLocation, int amount, ItemTaskType itemTaskType = ItemTaskType.DepositMoney) =>
+        amount >= 0
+            ? TryAddMoney(moneyLocation, amount, itemTaskType)
+            : TrySpendMoney(moneyLocation, -(long)amount, itemTaskType);
 
     public bool ChangeMoney(SlotType typeFrom, SlotType typeTo, int amount, ItemTaskType itemTaskType = ItemTaskType.DepositMoney)
     {
+        if (typeFrom == SlotType.None)
+            return ChangeMoney(typeTo, amount, itemTaskType);
+        if (typeTo == SlotType.None)
+            return amount >= 0
+                ? TrySpendMoney(typeFrom, amount, itemTaskType)
+                : TryAddMoney(typeFrom, -(long)amount, itemTaskType);
+
+        return amount >= 0
+            ? TryTransferMoney(typeFrom, typeTo, amount, itemTaskType)
+            : TryTransferMoney(typeTo, typeFrom, -(long)amount, itemTaskType);
+    }
+
+    public bool TrySpendMoney(SlotType moneyLocation, long amount, ItemTaskType itemTaskType = ItemTaskType.DepositMoney)
+    {
+        if (amount < 0 || amount > int.MaxValue)
+            return false;
+
         var itemTasks = new List<ItemTask>();
-        switch (typeFrom)
+        lock (_moneyLock)
         {
-            case SlotType.Inventory:
-                if (amount > Money)
-                {
-                    SendErrorMessage(ErrorMessageType.NotEnoughMoney);
-                    return false;
-                }
-                Money -= amount;
-                itemTasks.Add(new MoneyChange(-amount));
-                break;
-            case SlotType.Bank:
-                if (amount > Money2)
-                {
-                    SendErrorMessage(ErrorMessageType.NotEnoughMoney);
-                    return false;
-                }
-                Money2 -= amount;
-                itemTasks.Add(new MoneyChangeBank(-amount));
-                break;
+            if (!IsMoneyLocation(moneyLocation))
+                return false;
+            var balance = GetMoneyBalance(moneyLocation);
+            if (balance < amount)
+            {
+                SendErrorMessage(ErrorMessageType.NotEnoughMoney);
+                return false;
+            }
+
+            SetMoneyBalance(moneyLocation, balance - amount);
+            itemTasks.Add(CreateMoneyChange(moneyLocation, -(int)amount));
         }
-        switch (typeTo)
-        {
-            case SlotType.Inventory:
-                Money += amount;
-                itemTasks.Add(new MoneyChange(amount));
-                break;
-            case SlotType.Bank:
-                Money2 += amount;
-                itemTasks.Add(new MoneyChangeBank(amount));
-                break;
-        }
+
         SendPacket(new SCItemTaskSuccessPacket(itemTaskType, itemTasks, []));
         return true;
     }
 
-    public bool AddMoney(SlotType moneyLocation, int amount, ItemTaskType itemTaskType = ItemTaskType.DepositMoney)
+    public bool TryAddMoney(SlotType moneyLocation, long amount, ItemTaskType itemTaskType = ItemTaskType.DepositMoney)
     {
-        if (amount < 0)
+        if (amount < 0 || amount > int.MaxValue)
             return false;
-        return ChangeMoney(SlotType.None, moneyLocation, amount, itemTaskType);
+
+        var itemTasks = new List<ItemTask>();
+        lock (_moneyLock)
+        {
+            if (!IsMoneyLocation(moneyLocation))
+                return false;
+            var balance = GetMoneyBalance(moneyLocation);
+
+            try
+            {
+                SetMoneyBalance(moneyLocation, checked(balance + amount));
+            }
+            catch (OverflowException)
+            {
+                Logger.Error("Money overflow prevented for character {0} ({1}), location {2}, balance {3}, amount {4}",
+                    Name, Id, moneyLocation, balance, amount);
+                return false;
+            }
+
+            itemTasks.Add(CreateMoneyChange(moneyLocation, (int)amount));
+        }
+
+        SendPacket(new SCItemTaskSuccessPacket(itemTaskType, itemTasks, []));
+        return true;
     }
 
-    public bool SubtractMoney(SlotType moneyLocation, int amount, ItemTaskType itemTaskType = ItemTaskType.DepositMoney)
+    public bool TryTransferMoney(SlotType typeFrom, SlotType typeTo, long amount,
+        ItemTaskType itemTaskType = ItemTaskType.DepositMoney)
     {
-        if (amount < 0)
+        if (amount < 0 || amount > int.MaxValue)
             return false;
-        return ChangeMoney(SlotType.None, moneyLocation, -amount, itemTaskType);
+
+        var itemTasks = new List<ItemTask>();
+        lock (_moneyLock)
+        {
+            if (!IsMoneyLocation(typeFrom) || !IsMoneyLocation(typeTo))
+                return false;
+            var source = GetMoneyBalance(typeFrom);
+            var destination = GetMoneyBalance(typeTo);
+            if (source < amount)
+            {
+                SendErrorMessage(ErrorMessageType.NotEnoughMoney);
+                return false;
+            }
+
+            try
+            {
+                if (typeFrom != typeTo)
+                {
+                    var newDestination = checked(destination + amount);
+                    SetMoneyBalance(typeFrom, source - amount);
+                    SetMoneyBalance(typeTo, newDestination);
+                }
+            }
+            catch (OverflowException)
+            {
+                Logger.Error("Money transfer overflow prevented for character {0} ({1}), from {2} to {3}, amount {4}",
+                    Name, Id, typeFrom, typeTo, amount);
+                return false;
+            }
+
+            itemTasks.Add(CreateMoneyChange(typeFrom, -(int)amount));
+            itemTasks.Add(CreateMoneyChange(typeTo, (int)amount));
+        }
+
+        SendPacket(new SCItemTaskSuccessPacket(itemTaskType, itemTasks, []));
+        return true;
     }
+
+    public static bool TryExchangeMoney(Character first, Character second, int firstPays, int secondPays)
+    {
+        if (first == null || second == null || first == second || firstPays < 0 || secondPays < 0)
+            return false;
+
+        lock (MoneyExchangeLock)
+        lock (first._moneyLock)
+        lock (second._moneyLock)
+        {
+            if (first._money < firstPays || second._money < secondPays)
+                return false;
+
+            try
+            {
+                var firstBalance = checked(first._money - firstPays + secondPays);
+                var secondBalance = checked(second._money - secondPays + firstPays);
+                first._money = firstBalance;
+                second._money = secondBalance;
+                return true;
+            }
+            catch (OverflowException)
+            {
+                Logger.Error("Money exchange overflow prevented between characters {0} ({1}) and {2} ({3})",
+                    first.Name, first.Id, second.Name, second.Id);
+                return false;
+            }
+        }
+    }
+
+    public bool AddMoney(SlotType moneyLocation, int amount, ItemTaskType itemTaskType = ItemTaskType.DepositMoney) =>
+        TryAddMoney(moneyLocation, amount, itemTaskType);
+
+    public bool SubtractMoney(SlotType moneyLocation, int amount, ItemTaskType itemTaskType = ItemTaskType.DepositMoney) =>
+        TrySpendMoney(moneyLocation, amount, itemTaskType);
+
+    private static bool IsMoneyLocation(SlotType moneyLocation) =>
+        moneyLocation is SlotType.Inventory or SlotType.Bank;
+
+    private long GetMoneyBalance(SlotType moneyLocation) => moneyLocation switch
+    {
+        SlotType.Inventory => _money,
+        SlotType.Bank => _money2,
+        _ => throw new ArgumentOutOfRangeException(nameof(moneyLocation))
+    };
+
+    private void SetMoneyBalance(SlotType moneyLocation, long value)
+    {
+        if (moneyLocation == SlotType.Inventory)
+            _money = value;
+        else if (moneyLocation == SlotType.Bank)
+            _money2 = value;
+        else
+            throw new ArgumentOutOfRangeException(nameof(moneyLocation));
+    }
+
+    private static ItemTask CreateMoneyChange(SlotType moneyLocation, int amount) => moneyLocation switch
+    {
+        SlotType.Inventory => new MoneyChange(amount),
+        SlotType.Bank => new MoneyChangeBank(amount),
+        _ => throw new ArgumentOutOfRangeException(nameof(moneyLocation))
+    };
 
     public void ChangeLabor(short change, int actabilityId)
     {
@@ -2038,8 +2190,8 @@ public partial class Character : Unit, ICharacter
 
     public void DoRepair(List<Item> items)
     {
-        var tasks = new List<ItemTask>();
-        var repairCost = 0;
+        var repairItems = new List<EquipItem>();
+        long repairCost = 0;
 
         foreach (var item in items)
         {
@@ -2083,24 +2235,23 @@ public partial class Character : Unit, ICharacter
 
             var currentRepairCost = equipItem.RepairCost;
 
-            if (Money < currentRepairCost)
-            {
-                Logger.Warn($"Not enough money to repair, Item: {item.Id}, Money: {Money}, RepairCost: {currentRepairCost}");
-                continue;
-            }
+            repairCost += currentRepairCost;
+            repairItems.Add(equipItem);
+        }
 
+        if (repairCost <= 0)
+            return;
+
+        if (!TrySpendMoney(SlotType.Inventory, repairCost, ItemTaskType.Repair))
+            return;
+
+        var tasks = new List<ItemTask>();
+        foreach (var equipItem in repairItems)
+        {
             equipItem.Durability = equipItem.MaxDurability;
             equipItem.IsDirty = true;
-            repairCost += currentRepairCost;
-
-            tasks.Add(new ItemUpdate(item));
+            tasks.Add(new ItemUpdate(equipItem));
         }
-
-        if (repairCost > 0)
-        {
-            ChangeMoney(SlotType.Inventory, -repairCost);
-        }
-
         Connection.SendPacket(new SCItemTaskSuccessPacket(ItemTaskType.Repair, tasks, []));
     }
 

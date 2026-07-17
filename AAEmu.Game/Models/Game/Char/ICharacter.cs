@@ -31,6 +31,9 @@ public interface ICharacter : IUnit
     void ChangeLabor(short change, int actabilityId);
     void AddExp(int expDelta, bool shouldAddAbilityExp);
     public bool ChangeMoney(SlotType typeFrom, SlotType typeTo, int amount, ItemTaskType itemTaskType = ItemTaskType.DepositMoney);
+    public bool TrySpendMoney(SlotType moneyLocation, long amount, ItemTaskType itemTaskType = ItemTaskType.DepositMoney);
+    public bool TryAddMoney(SlotType moneyLocation, long amount, ItemTaskType itemTaskType = ItemTaskType.DepositMoney);
+    public bool TryTransferMoney(SlotType typeFrom, SlotType typeTo, long amount, ItemTaskType itemTaskType = ItemTaskType.DepositMoney);
     public void ChangeGamePoints(GamePointKind kind, int change);
     public void SetGrowthRate(float value);
     public void SetLootRate(float value);

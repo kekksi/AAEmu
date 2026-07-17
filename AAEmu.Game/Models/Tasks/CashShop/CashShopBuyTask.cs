@@ -239,7 +239,7 @@ public class CashShopBuyTask(byte buyMode, Character buyer, Character targetPlay
                     AccountManager.Instance.AddLoyalty(buyer.AccountId, (int)(sku.Price * -1));
                     break;
                 case CashShopCurrencyType.Coins:
-                    if (!buyer.SubtractMoney(SlotType.Inventory, (int)sku.Price, ItemTaskType.StoreBuy))
+                    if (!buyer.TrySpendMoney(SlotType.Inventory, sku.Price, ItemTaskType.StoreBuy))
                         Logger.Error($"Sale validation failed for {buyer.Name}, {sku.Currency} x {sku.Price}");
                     break;
                 default:

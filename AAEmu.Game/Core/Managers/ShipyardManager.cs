@@ -121,29 +121,21 @@ public class ShipyardManager(ITaskManager taskManager, IObjectIdManager objectId
         var skillProducts = skillManager.GetSkillProductsBySkillId(foundItems[0].Template.UseSkillId);
         if (reagents != null && skillProducts != null)
         {
-            if (reagents.Count > 0)
+            foreach (var reagent in reagents)
             {
-                // first check only
-                var enough = true;
-                foreach (var reagent in reagents)
+                if (!character.Inventory.CheckItems(SlotType.Inventory, reagent.ItemId, reagent.Amount))
                 {
-                    if (character.Inventory.CheckItems(SlotType.Inventory, reagent.ItemId, reagent.Amount))
-                    {
-                        continue;
-                    }
-
-                    enough = false;
                     Logger.Error("Not enough reagents Id={0}, Amount={1}", reagent.ItemId, reagent.Amount);
-                }
-                if (!enough)
-                {
                     return false;
                 }
-                foreach (var reagent in reagents)
-                {
-                    character.Inventory.Bag.ConsumeItem(ItemTaskType.SkillReagents, reagent.ItemId, reagent.Amount, null);
-                }
             }
+
+            if (!character.TrySpendMoney(SlotType.Inventory, moneyOwed, ItemTaskType.Shipyard))
+                return false;
+
+            foreach (var reagent in reagents)
+                character.Inventory.Bag.ConsumeItem(ItemTaskType.SkillReagents, reagent.ItemId, reagent.Amount, null);
+
             // maybe not needed
             if (skillProducts.Count > 0)
             {
@@ -160,7 +152,6 @@ public class ShipyardManager(ITaskManager taskManager, IObjectIdManager objectId
         }
 
         character.Inventory.Bag.ConsumeItem(ItemTaskType.Shipyard, designId, 1, null);
-        character.SubtractMoney(SlotType.Inventory, (int)moneyOwed, ItemTaskType.Shipyard);
 
         return true;
     }

@@ -161,18 +161,22 @@ public class AuctionManager(IItemManager itemManager, INameManager nameManager, 
 
         if (bid.Money >= auctionLot.DirectMoney && auctionLot.DirectMoney != 0) // Buy now
         {
+            if (!player.TrySpendMoney(SlotType.Inventory, auctionLot.DirectMoney))
+                return;
+
             if (auctionLot.BidderId != 0) // send mail to person who bid if item was bought at full price.
             {
                 var newMail = new MailForAuction(auctionLot.Item.TemplateId, auctionLot.ClientId, auctionLot.DirectMoney, 0);
                 newMail.FinalizeForBidFail(auctionLot.BidderId, auctionLot.BidMoney);
                 newMail.Send();
             }
-
-            player.SubtractMoney(SlotType.Inventory, auctionLot.DirectMoney);
             RemoveAuctionLotSold(auctionLot, player.Name, auctionLot.DirectMoney);
         }
         else if (bid.Money > auctionLot.BidMoney) // Bid
         {
+            if (!player.TrySpendMoney(SlotType.Inventory, bid.Money, ItemTaskType.Auction))
+                return;
+
             if (auctionLot.BidderName != "" && auctionLot.BidderId != 0) // Send mail to old bidder.
             {
                 var moneyArray = new int[3];
@@ -196,8 +200,6 @@ public class AuctionManager(IItemManager itemManager, INameManager nameManager, 
             bid.BidderName = player.Name;
             bid.BidderId = player.Id;
             bid.WorldId = (byte)player.Transform.WorldId;
-
-            player.SubtractMoney(SlotType.Inventory, bid.Money, ItemTaskType.Auction);
             player.SendPacket(new SCAuctionBidPacket(bid, false, auctionLot.Item.TemplateId));
             auctionLot.IsDirty = true;
 
@@ -688,7 +690,7 @@ public class AuctionManager(IItemManager itemManager, INameManager nameManager, 
         }
 
         // Deduct AH fee (but only if it's actually generated from an in-game player)
-        if (player != null && !player.ChangeMoney(SlotType.Inventory, -(int)auctionFee))
+        if (player != null && !player.TrySpendMoney(SlotType.Inventory, (int)auctionFee))
         {
             player.SendErrorMessage(ErrorMessageType.CanNotPutupMoney);
             return;
