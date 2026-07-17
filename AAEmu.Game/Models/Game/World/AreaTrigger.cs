@@ -15,7 +15,7 @@ public class AreaTrigger
     private static Logger Logger { get; } = LogManager.GetCurrentClassLogger();
     public AreaShape Shape { get; set; }
     public Doodad Owner { get; set; }
-    public BaseUnit Caster { get; set; }
+    public Unit Caster { get; set; }
 
     /// <summary>
     /// Units currently inside the Shape
@@ -80,7 +80,7 @@ public class AreaTrigger
             unit.IncrementTriggerCount(InsideBuffTemplate.BuffId);
             if (unit.GetTriggerCount(InsideBuffTemplate.BuffId) == 1)
             {
-                InsideBuffTemplate.Apply(Caster, new SkillCasterUnit(Caster.ObjId), unit, new SkillCastUnitTarget(unit.ObjId), null, new EffectSource(), null, DateTime.UtcNow);
+                InsideBuffTemplate.Apply(Caster, new SkillCasterUnit(Caster.ObjId), unit, new SkillCastUnitTarget(unit.ObjId), null, new EffectSource(Caster), null, DateTime.UtcNow);
             }
         }
     }
@@ -145,7 +145,7 @@ public class AreaTrigger
                     castAction = new CastSkill(SkillId, 0);
                 }
 
-                effect.Apply(Caster, new SkillCasterUnit(Caster.ObjId), unit, new SkillCastUnitTarget(unit.ObjId), castAction, new EffectSource(), new SkillObject(), DateTime.UtcNow);
+                effect.Apply(Caster, new SkillCasterUnit(Caster.ObjId), unit, new SkillCastUnitTarget(unit.ObjId), castAction, new EffectSource(Caster), new SkillObject(), DateTime.UtcNow);
             }
         }
     }

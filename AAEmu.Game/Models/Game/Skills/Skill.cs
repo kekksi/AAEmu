@@ -764,13 +764,13 @@ public class Skill
         if (Template.ChannelingBuffId != 0)
         {
             var buff = SkillManager.Instance.GetBuffTemplate(Template.ChannelingBuffId);
-            buff.Apply(caster, casterCaster, target, targetCaster, new CastSkill(Template.Id, TlId), new EffectSource(this), skillObject, DateTime.UtcNow);
+            buff.Apply(caster, casterCaster, target, targetCaster, new CastSkill(Template.Id, TlId), new EffectSource(this, unit), skillObject, DateTime.UtcNow);
         }
 
         if (Template.ChannelingTargetBuffId != 0)
         {
             var buff = SkillManager.Instance.GetBuffTemplate(Template.ChannelingTargetBuffId);
-            buff.Apply(caster, casterCaster, target, targetCaster, new CastSkill(Template.Id, TlId), new EffectSource(this), skillObject, DateTime.UtcNow);
+            buff.Apply(caster, casterCaster, target, targetCaster, new CastSkill(Template.Id, TlId), new EffectSource(this, unit), skillObject, DateTime.UtcNow);
         }
 
         Doodad doodad = null;
@@ -820,7 +820,7 @@ public class Skill
         if (Template.ToggleBuffId != 0)
         {
             var buff = SkillManager.Instance.GetBuffTemplate(Template.ToggleBuffId);
-            buff.Apply(caster, casterCaster, target, targetCaster, new CastSkill(Template.Id, TlId), new EffectSource(this), skillObject, DateTime.UtcNow);
+            buff.Apply(caster, casterCaster, target, targetCaster, new CastSkill(Template.Id, TlId), new EffectSource(this, unit), skillObject, DateTime.UtcNow);
         }
 
         var totalDelay = 0;
@@ -1289,12 +1289,12 @@ public class Skill
                     else
                     {
                         effect.Template.Apply(npc ?? caster, casterCaster, target, thisTargetCaster, new CastSkill(Template.Id, TlId),
-                            new EffectSource(this), skillObject, DateTime.UtcNow, packets);
+                            new EffectSource(this, unit), skillObject, DateTime.UtcNow, packets);
                     }
                 }
                 else
                 {
-                    effect.Template.Apply(caster, casterCaster, target, thisTargetCaster, new CastSkill(Template.Id, TlId), new EffectSource(this), skillObject, DateTime.UtcNow, packets);
+                    effect.Template.Apply(caster, casterCaster, target, thisTargetCaster, new CastSkill(Template.Id, TlId), new EffectSource(this, unit), skillObject, DateTime.UtcNow, packets);
 
                     if (player is { SkillCancelled: true }) { Cancelled = true; }
                 }

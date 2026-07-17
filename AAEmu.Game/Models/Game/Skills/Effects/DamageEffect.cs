@@ -84,14 +84,17 @@ public class DamageEffect : EffectTemplate
             return;
         }
 
-        // Null check here as for some reason, in rare occasions we get null as the caster here
-        if (caster == null)
+        // Delayed and world effects retain the originating Unit in EffectSource.
+        // Damage calculations require Unit combat stats and must never run with a Doodad caster.
+        var casterUnit = caster as Unit ?? source?.Caster;
+        if (casterUnit == null)
         {
-            Logger.Warn($"No caster defined for DamageEffect {Id}, with targetObjId {target.ObjId} ({target})");
+            Logger.Warn($"No Unit caster defined for DamageEffect {Id}, with targetObjId {target.ObjId} ({target})");
             if (traceMissileRain)
                 Logger.Info($"[MR-TRACE] damage-skip effect={Id} reason=null-caster");
             return;
         }
+        caster = casterUnit;
 
         if (Bonuses != null)
         {

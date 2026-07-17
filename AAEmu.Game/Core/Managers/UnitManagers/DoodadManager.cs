@@ -2806,6 +2806,7 @@ public class DoodadManager(IObjectIdManager objectIdManager, IDoodadIdManager do
         doodad.TemplateId = template.Id; // copy the templateId
         doodad.Template = template;
         doodad.OwnerObjId = ownerObject?.ObjId ?? 0;
+        doodad.CasterSnapshot = ownerObject as Unit;
         doodad.PlantTime = DateTime.UtcNow;
         doodad.OwnerType = DoodadOwnerType.System;
         doodad.FuncGroupId = doodad.GetFuncGroupId();

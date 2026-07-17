@@ -171,6 +171,9 @@ public class BuffTemplate
         CastAction castObj, EffectSource source, SkillObject skillObject, DateTime time,
         CompressedGamePackets packetBuilder = null)
     {
+        if (caster is not Unit && source?.Caster != null)
+            caster = source.Caster;
+
         if (BuffId > 0 && target.Buffs.CheckBuff(BuffId))
             return;
 
@@ -393,7 +396,7 @@ public class BuffTemplate
 
             var targetObj = new SkillCastUnitTarget(owner.ObjId);
             var skillObj = new SkillObject(); // TODO ?
-            eff.Apply(caster, buff.SkillCaster, owner, targetObj, new CastBuff(buff), new EffectSource(this), skillObj,
+            eff.Apply(caster, buff.SkillCaster, owner, targetObj, new CastBuff(buff), new EffectSource(this, buff.Caster), skillObj,
                 DateTime.UtcNow);
         }
     }
@@ -436,7 +439,7 @@ public class BuffTemplate
                         continue;
 
                     var targetObj = new SkillCastUnitTarget(trg.ObjId);
-                    eff.Apply(source, buff.SkillCaster, trg, targetObj, new CastBuff(buff), new EffectSource(this), skillObj, DateTime.UtcNow);
+                    eff.Apply(source, buff.SkillCaster, trg, targetObj, new CastBuff(buff), new EffectSource(this, buff.Caster), skillObj, DateTime.UtcNow);
                 }
             }
         }

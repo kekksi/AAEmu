@@ -199,6 +199,11 @@ public class Doodad : BaseUnit
     /// ObjId of the owner
     /// </summary>
     public uint OwnerObjId { get; set; }
+
+    /// <summary>
+    /// Stable unit snapshot for delayed phase and area effects.
+    /// </summary>
+    public Unit CasterSnapshot { get; set; }
     /// <summary>
     /// ObjId of the parent object this Doodad is a child of (on top of)
     /// </summary>
@@ -842,7 +847,7 @@ public class Doodad : BaseUnit
         GrowthTime = PlantTime.AddMilliseconds(growTime);
 
         // Actually do the phase change
-        var unit = ParentWorld.GetUnit(OwnerObjId);
+        var unit = CasterSnapshot ?? ParentWorld.GetUnit(OwnerObjId);
         DoChangePhase(unit, (int)FuncGroupId);
     }
 

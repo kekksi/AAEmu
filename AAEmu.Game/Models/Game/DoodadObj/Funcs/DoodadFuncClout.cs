@@ -33,7 +33,21 @@ public class DoodadFuncClout : DoodadPhaseFuncTemplate
         else
             Logger.Trace("DoodadFuncClout : Duration {0}, Tick {1}, TargetRelationId {2}, BuffId {3}, ProjectileId {4}, ShowToFriendlyOnly {5}, NextPhase {6}, AoeShapeId {7}, TargetBuffTagId {8}, TargetNoBuffTagId {9}, UseOriginSource {10}", Duration, Tick, TargetRelation, BuffId, ProjectileId, ShowToFriendlyOnly, NextPhase, AoeShapeId, TargetBuffTagId, TargetNoBuffTagId, UseOriginSource);
 
-        var areaTrigger = new AreaTrigger { Shape = WorldManager.Instance.GetAreaShapeById(AoeShapeId) };
+        var unitCaster = caster as Unit
+            ?? owner.CasterSnapshot
+            ?? owner.ParentWorld?.GetUnit(owner.OwnerObjId)
+            ?? owner.GetOwnerCharacter();
+        if (unitCaster == null)
+        {
+            Logger.Warn("DoodadFuncClout {0} on doodad {1}:{2} has no Unit caster; area trigger was not created", Id, owner.TemplateId, owner.ObjId);
+            return false;
+        }
+
+        var areaTrigger = new AreaTrigger
+        {
+            Shape = WorldManager.Instance.GetAreaShapeById(AoeShapeId),
+            Caster = unitCaster
+        };
 
         if (UseOriginSource)
         {
@@ -50,8 +64,6 @@ public class DoodadFuncClout : DoodadPhaseFuncTemplate
         {
             areaTrigger.Owner = owner;
         }
-
-        areaTrigger.Caster = caster is Character ? caster : owner;
 
         areaTrigger.InsideBuffTemplate = SkillManager.Instance.GetBuffTemplate(BuffId);
         areaTrigger.TargetRelation = TargetRelation;

@@ -80,7 +80,7 @@ public class PlotEventEffect
                 target,
                 state.TargetCaster,
                 new CastPlot(evt.PlotId, state.ActiveSkill.TlId, evt.Id, state.ActiveSkill.Template.Id),
-                new EffectSource(state.ActiveSkill),
+                new EffectSource(state.ActiveSkill, state.Caster),
                 state.SkillObject,
                 DateTime.UtcNow,
                 gamePackets);
