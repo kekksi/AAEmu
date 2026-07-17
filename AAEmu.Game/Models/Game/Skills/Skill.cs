@@ -47,6 +47,7 @@ public class Skill
     public Dictionary<uint, SkillHitType> HitTypes { get; set; }
     public BaseUnit InitialTarget { get; set; }//Temp Hack Fix. Replace this with UnitsEffected
     private bool _bypassGcd;
+    private int _costsCommitted;
     public bool Cancelled { get; set; } = false;
     public Action Callback { get; set; }
 
@@ -94,6 +95,8 @@ public class Skill
         {
             return SkillResult.InvalidSource;
         }
+
+        Interlocked.Exchange(ref _costsCommitted, 0);
 
         // Cast character for future reference
         var character = caster as Character;
@@ -196,6 +199,9 @@ public class Skill
         // If skill uses Plots, then start the plot
         if (Template.Plot != null)
         {
+            if (Template.PlotOnly)
+                CommitCostsAndCooldowns(unit);
+
             Task.Run(() => Template.Plot.RunAsync(caster, casterCaster, target, targetCaster, skillObject, this));
             if (Template.PlotOnly)
                 return SkillResult.Success;
@@ -607,14 +613,7 @@ public class Skill
     {
         if (caster is not Unit unit) { return; }
 
-        if (!_bypassGcd)
-        {
-            var gcd = Template.CustomGcd;
-            if (Template.DefaultGcd)
-                gcd = caster is Npc ? 1500 : 1000;
-
-            unit.GlobalCooldown = DateTime.UtcNow.AddMilliseconds(gcd * (unit.GlobalCooldownMul / 100));
-        }
+        CommitCostsAndCooldowns(unit);
 
         if (caster is Npc && Template.SkillControllerId != 0)
         {
@@ -652,9 +651,6 @@ public class Skill
             }
         }
         unit.SkillTask = null;
-
-        ConsumeMana(caster);
-        unit.Cooldowns.AddCooldown(Template.Id, (uint)Template.CooldownTime);
 
         // if (Id == 2 || Id == 3 || Id == 4)
         // {
@@ -1562,6 +1558,24 @@ AlwaysHit:
         var cost2 = baseCost * Template.ManaLevelMd + Template.ManaCost;
         var manaCost = (int)caster.SkillModifiersCache.ApplyModifiers(this, SkillAttribute.ManaCost, cost2);
         return manaCost;
+    }
+
+    private void CommitCostsAndCooldowns(Unit unit)
+    {
+        if (Interlocked.Exchange(ref _costsCommitted, 1) != 0)
+            return;
+
+        if (!_bypassGcd)
+        {
+            var gcd = Template.CustomGcd;
+            if (Template.DefaultGcd)
+                gcd = unit is Npc ? 1500 : 1000;
+
+            unit.GlobalCooldown = DateTime.UtcNow.AddMilliseconds(gcd * (unit.GlobalCooldownMul / 100));
+        }
+
+        ConsumeMana(unit);
+        unit.Cooldowns.AddCooldown(Template.Id, (uint)Template.CooldownTime);
     }
 
     public void ConsumeMana(BaseUnit caster)
