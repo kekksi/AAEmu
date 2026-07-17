@@ -11,6 +11,7 @@ namespace AAEmu.Game.Models.Game.Skills.Plots.Tree;
 
 public class PlotTree(uint plotId)
 {
+    private const uint MissileRainPlotId = 6;
     private static Logger Logger { get; } = LogManager.GetCurrentClassLogger();
 
     public uint PlotId { get; set; } = plotId;
@@ -22,6 +23,10 @@ public class PlotTree(uint plotId)
         var treeWatch = new Stopwatch();
         treeWatch.Start();
         Logger.Trace($"Executing plot tree with ID {PlotId}");
+        if (PlotId == MissileRainPlotId)
+        {
+            Logger.Info($"[MR-TRACE] plot-start skill={state.ActiveSkill.Template.Id} tlId={state.ActiveSkill.TlId} caster={DescribeUnit(state.Caster)} originalTarget={DescribeUnit(state.Target)} targetCastType={state.TargetCaster?.Type}");
+        }
         try
         {
             var stopWatch = new Stopwatch();
@@ -47,6 +52,9 @@ public class PlotTree(uint plotId)
                 }
                 if (state.CancellationRequested())
                 {
+                    if (PlotId == MissileRainPlotId)
+                        Logger.Info($"[MR-TRACE] plot-cancel event={node.Event.Id} casting={state.IsCasting} channeling={state.IsChanneling}");
+
                     if (state.IsCasting)
                     {
                         state.Caster.BroadcastPacket(
@@ -78,10 +86,22 @@ public class PlotTree(uint plotId)
 
                     item.targetInfo.UpdateTargetInfo(node.Event, state);
 
+                    if (PlotId == MissileRainPlotId)
+                    {
+                        var affected = string.Join(",", item.targetInfo.EffectedTargets.Take(8).Select(DescribeUnit));
+                        Logger.Info($"[MR-TRACE] event-targets event={node.Event.Id} eventPos={node.Event.Position} ticket={state.Tickets[node.Event.Id]}/{node.Event.Tickets} sourceUpdate={node.Event.SourceUpdateMethodId} targetUpdate={node.Event.TargetUpdateMethodId} source={DescribeUnit(item.targetInfo.Source)} target={DescribeUnit(item.targetInfo.Target)} affectedCount={item.targetInfo.EffectedTargets.Count} affected=[{affected}]");
+                    }
+
                     if (item.targetInfo.Target == null)
+                    {
+                        if (PlotId == MissileRainPlotId)
+                            Logger.Info($"[MR-TRACE] event-skip event={node.Event.Id} reason=null-target");
                         continue;
+                    }
 
                     var condition = node.CheckConditions(state, item.targetInfo);
+                    if (PlotId == MissileRainPlotId)
+                        Logger.Info($"[MR-TRACE] event-condition event={node.Event.Id} conditions={node.Event.Conditions.Count} passed={condition} effects={node.Event.Effects.Count} children={node.Children.Count}");
 
                     if (condition)
                     {
@@ -149,7 +169,21 @@ public class PlotTree(uint plotId)
 
         DoPlotEnd(state);
         Logger.Trace($"Tree with ID {PlotId} has finished executing took {treeWatch.ElapsedMilliseconds}ms");
+        if (PlotId == MissileRainPlotId)
+            Logger.Info($"[MR-TRACE] plot-end elapsedMs={treeWatch.ElapsedMilliseconds}");
     }
+
+    private static string DescribeUnit(BaseUnit unit)
+    {
+        if (unit == null)
+            return "null";
+        if (unit.Transform == null)
+            return $"{unit.GetType().Name}#{unit.ObjId}(tpl={unit.TemplateId},no-transform)";
+
+        var position = unit.Transform.World.Position;
+        return $"{unit.GetType().Name}#{unit.ObjId}(tpl={unit.TemplateId},hp={(unit as Unit)?.Hp},x={position.X:F2},y={position.Y:F2},z={position.Z:F2})";
+    }
+
     private void HandleChannelingFinish(PlotNode node, PlotState state, Queue<(PlotNode node, DateTime timestamp, PlotTargetInfo targetInfo)> queue, (PlotNode node, DateTime timestamp, PlotTargetInfo targetInfo) item)
     {
         if (node == null || state == null || queue == null || item.targetInfo == null)

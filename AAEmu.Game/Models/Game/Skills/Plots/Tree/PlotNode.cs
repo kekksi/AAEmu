@@ -9,6 +9,7 @@ namespace AAEmu.Game.Models.Game.Skills.Plots.Tree;
 
 public class PlotNode
 {
+    private const uint MissileRainPlotId = 6;
     private static Logger Logger { get; } = LogManager.GetCurrentClassLogger();
 
     // Tree
@@ -46,11 +47,18 @@ public class PlotNode
         var stopwatch = new Stopwatch();
         stopwatch.Start();
         byte flag = 2;
+        if (Event.PlotId == MissileRainPlotId)
+            Logger.Info($"[MR-TRACE] event-execute event={Event.Id} effects={Event.Effects.Count} affected={targetInfo.EffectedTargets.Count}");
+
         foreach (var eff in Event.Effects)
         {
             try
             {
+                if (Event.PlotId == MissileRainPlotId)
+                    Logger.Info($"[MR-TRACE] effect-start event={Event.Id} effectType={eff.ActualType} effectId={eff.ActualId} sourceId={eff.SourceId} targetId={eff.TargetId} affected={targetInfo.EffectedTargets.Count}");
                 eff.ApplyEffect(state, targetInfo, Event, ref flag, IsChannelStart());
+                if (Event.PlotId == MissileRainPlotId)
+                    Logger.Info($"[MR-TRACE] effect-end event={Event.Id} effectType={eff.ActualType} effectId={eff.ActualId}");
             }
             catch (Exception e)
             {

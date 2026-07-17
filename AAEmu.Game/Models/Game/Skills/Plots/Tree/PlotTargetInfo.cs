@@ -5,11 +5,15 @@ using AAEmu.Game.Models.Game.Skills.Plots.UpdateTargetMethods;
 using AAEmu.Game.Models.Game.Skills.Utils;
 using AAEmu.Game.Models.Game.Units;
 using AAEmu.Game.Utils;
+using NLog;
 
 namespace AAEmu.Game.Models.Game.Skills.Plots.Tree;
 
 public class PlotTargetInfo
 {
+    private const uint MissileRainPlotId = 6;
+    private static Logger Logger { get; } = LogManager.GetCurrentClassLogger();
+
     public BaseUnit Source { get; set; }
     private BaseUnit PreviousSource { get; set; }
     public BaseUnit Target { get; set; }
@@ -101,7 +105,15 @@ public class PlotTargetInfo
             posUnit.Transform.Local.AddDistanceToFront(args.Distance / 1000f - 0.01f);
         }
         // TODO: Make this use geo data, need to check if we can grab parent world from here
-        posUnit.Transform.Local.SetHeight(Math.Max(PreviousTarget.Transform.World.Position.Z + args.HeightOffset / 1000f, WorldManager.Instance.GetHeight(posUnit.Transform)));
+        var previousZ = PreviousTarget.Transform.World.Position.Z;
+        var terrainZ = WorldManager.Instance.GetHeight(posUnit.Transform);
+        var finalZ = Math.Max(previousZ + args.HeightOffset / 1000f, terrainZ);
+        posUnit.Transform.Local.SetHeight(finalZ);
+
+        if (plotEvent.PlotId == MissileRainPlotId)
+        {
+            Logger.Info($"[MR-TRACE] area-position event={plotEvent.Id} shape={args.Shape?.Id} shapeType={args.Shape?.Type} radius={args.Shape?.Value1:F2} distanceM={args.Distance / 1000f:F2} angle={args.Angle} previousZ={previousZ:F2} heightOffsetM={args.HeightOffset / 1000f:F2} terrainZ={terrainZ:F2} final={DescribeUnit(posUnit)} maxTargets={args.MaxTargets} relation={args.UnitRelationType} typeFlag={args.UnitTypeFlag} hitOnce={args.HitOnce}");
+        }
 
         if (args.MaxTargets == 0)
         {
@@ -166,10 +178,20 @@ public class PlotTargetInfo
         posUnit.Transform = PreviousTarget.Transform.CloneDetached(posUnit);
         posUnit.Transform.ZoneId = PreviousTarget.Transform.ZoneId;
         posUnit.Transform.InstanceId = PreviousTarget.Transform.InstanceId;
-        posUnit.Transform.Local.SetZRotation(((float)Random.Shared.Next(-180, 180)).DegToRad());
-        posUnit.Transform.Local.AddDistanceToFront(Random.Shared.NextSingle() * args.Distance / 1000f);
+        var rotationDegrees = Random.Shared.Next(-180, 180);
+        var randomDistance = Random.Shared.NextSingle() * args.Distance / 1000f;
+        posUnit.Transform.Local.SetZRotation(((float)rotationDegrees).DegToRad());
+        posUnit.Transform.Local.AddDistanceToFront(randomDistance);
         // TODO: Make this use geo data, need to check if we can grab parent world from here
-        posUnit.Transform.Local.SetHeight(Math.Max(PreviousTarget.Transform.World.Position.Z + args.HeightOffset / 1000f, WorldManager.Instance.GetHeight(posUnit.Transform)));
+        var previousZ = PreviousTarget.Transform.World.Position.Z;
+        var terrainZ = WorldManager.Instance.GetHeight(posUnit.Transform);
+        var finalZ = Math.Max(previousZ + args.HeightOffset / 1000f, terrainZ);
+        posUnit.Transform.Local.SetHeight(finalZ);
+
+        if (plotEvent.PlotId == MissileRainPlotId)
+        {
+            Logger.Info($"[MR-TRACE] random-area-position event={plotEvent.Id} shape={args.Shape?.Id} shapeType={args.Shape?.Type} radius={args.Shape?.Value1:F2} rotationDeg={rotationDegrees} randomDistanceM={randomDistance:F2}/{args.Distance / 1000f:F2} previousZ={previousZ:F2} heightOffsetM={args.HeightOffset / 1000f:F2} terrainZ={terrainZ:F2} final={DescribeUnit(posUnit)} maxTargets={args.MaxTargets} relation={args.UnitRelationType} typeFlag={args.UnitTypeFlag} hitOnce={args.HitOnce}");
+        }
 
         if (args.MaxTargets == 0)
         {
@@ -203,7 +225,13 @@ public class PlotTargetInfo
     private static IEnumerable<Unit> FilterTargets(IEnumerable<Unit> units, PlotState state, IPlotTargetParams args, PlotEventTemplate plotEvent)
     {
         var template = state.ActiveSkill.Template;
-        var filtered = units;
+        var traceMissileRain = plotEvent.PlotId == MissileRainPlotId;
+        var initialUnits = traceMissileRain ? units.ToList() : null;
+        IEnumerable<Unit> filtered = initialUnits ?? units;
+
+        if (traceMissileRain)
+            Logger.Info($"[MR-TRACE] filter-start event={plotEvent.Id} input={initialUnits.Count} targetAlive={template.TargetAlive} targetDead={template.TargetDead} hitOnce={args.HitOnce} relation={args.UnitRelationType} typeFlag={args.UnitTypeFlag}");
+
         if (!template.TargetAlive)
             filtered = filtered.Where(o => o.Hp == 0);
         if (!template.TargetDead)
@@ -231,6 +259,46 @@ public class PlotTargetInfo
         filtered = SkillTargetingUtil.FilterWithRelation(args.UnitRelationType, state.Caster, filtered);
         filtered = filtered.Where(o => ((byte)o.TypeFlag & args.UnitTypeFlag) != 0);
 
+        if (traceMissileRain)
+        {
+            var result = filtered.ToList();
+            foreach (var candidate in initialUnits)
+            {
+                var reasons = new List<string>();
+                if (!template.TargetAlive && candidate.Hp != 0)
+                    reasons.Add("not-dead");
+                if (!template.TargetDead && candidate.Hp <= 0)
+                    reasons.Add("not-alive");
+                if (args.HitOnce && state.HitObjects.TryGetValue(plotEvent.Id, out var hitObjects) && hitObjects.Contains(candidate))
+                    reasons.Add("hit-once");
+
+                var relationState = state.Caster.GetRelationStateTo(candidate);
+                if (relationState == RelationState.Neutral)
+                    reasons.Add("neutral-prefilter");
+                if (!SkillTargetingUtil.FilterWithRelation(args.UnitRelationType, state.Caster, new[] { candidate }).Any())
+                    reasons.Add($"relation-{args.UnitRelationType}");
+                if (((byte)candidate.TypeFlag & args.UnitTypeFlag) == 0)
+                    reasons.Add("type-flag");
+
+                var accepted = result.Contains(candidate);
+                Logger.Info($"[MR-TRACE] filter-candidate event={plotEvent.Id} candidate={DescribeUnit(candidate)} relationState={relationState} canAttack={state.Caster.CanAttack(candidate)} unitType={candidate.TypeFlag} accepted={accepted} reasons=[{string.Join(",", reasons)}]");
+            }
+
+            Logger.Info($"[MR-TRACE] filter-end event={plotEvent.Id} output={result.Count} selected=[{string.Join(",", result.Select(DescribeUnit))}]");
+            return result;
+        }
+
         return filtered;
+    }
+
+    private static string DescribeUnit(BaseUnit unit)
+    {
+        if (unit == null)
+            return "null";
+        if (unit.Transform == null)
+            return $"{unit.GetType().Name}#{unit.ObjId}(tpl={unit.TemplateId},no-transform)";
+
+        var position = unit.Transform.World.Position;
+        return $"{unit.GetType().Name}#{unit.ObjId}(tpl={unit.TemplateId},hp={(unit as Unit)?.Hp},x={position.X:F2},y={position.Y:F2},z={position.Z:F2})";
     }
 }

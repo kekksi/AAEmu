@@ -15,6 +15,8 @@ namespace AAEmu.Game.Models.Game.Skills.Effects;
 
 public class DamageEffect : EffectTemplate
 {
+    private const uint MissileRainSkillId = 13281;
+
     public DamageType DamageType { get; set; }
     public int FixedMin { get; set; }
     public int FixedMax { get; set; }
@@ -70,9 +72,15 @@ public class DamageEffect : EffectTemplate
         CastAction castObj, EffectSource source, SkillObject skillObject, DateTime time,
         CompressedGamePackets packetBuilder = null)
     {
+        var traceMissileRain = source?.Skill?.Template?.Id == MissileRainSkillId;
+        if (traceMissileRain)
+            Logger.Info($"[MR-TRACE] damage-enter effect={Id} caster={caster?.GetType().Name}#{caster?.ObjId} target={target?.GetType().Name}#{target?.ObjId} targetHp={(target as Unit)?.Hp} damageType={DamageType} weaponSlot={WeaponSlotId} useRanged={UseRangedWeapon}");
+
         var trg = target as Unit;
         if (trg == null || trg.Hp <= 0)
         {
+            if (traceMissileRain)
+                Logger.Info($"[MR-TRACE] damage-skip effect={Id} reason=invalid-or-dead-target targetType={target?.GetType().Name} targetHp={trg?.Hp}");
             return;
         }
 
@@ -80,6 +88,8 @@ public class DamageEffect : EffectTemplate
         if (caster == null)
         {
             Logger.Warn($"No caster defined for DamageEffect {Id}, with targetObjId {target.ObjId} ({target})");
+            if (traceMissileRain)
+                Logger.Info($"[MR-TRACE] damage-skip effect={Id} reason=null-caster");
             return;
         }
 
@@ -96,6 +106,8 @@ public class DamageEffect : EffectTemplate
 
         if (target.Buffs.CheckDamageImmune(DamageType))
         {
+            if (traceMissileRain)
+                Logger.Info($"[MR-TRACE] damage-skip effect={Id} reason=immune target={target.ObjId}");
             target.BroadcastPacket(new SCUnitDamagedPacket(castObj, casterObj, caster.ObjId, target.ObjId, 1, 0)
             {
                 HitType = SkillHitType.Immune
@@ -105,11 +117,15 @@ public class DamageEffect : EffectTemplate
 
         var weapon = ((Unit)caster).Equipment.GetItemBySlot(WeaponSlotId);
         var holdable = (WeaponTemplate)weapon?.Template;
+        if (traceMissileRain)
+            Logger.Info($"[MR-TRACE] damage-weapon effect={Id} slot={WeaponSlotId} item={weapon?.TemplateId} templateType={weapon?.Template?.GetType().Name} holdable={holdable?.HoldableTemplate?.Id} rangedDps={((Unit)caster).RangedDps} rangedDpsInc={((Unit)caster).RangedDpsInc} levelDps={((Unit)caster).LevelDps}");
 
         var hitType = SkillHitType.Invalid;
         if ((source?.Skill?.HitTypes.TryGetValue(trg.ObjId, out hitType) ?? false)
             && (source?.Skill.SkillMissed(trg.ObjId) ?? false))
         {
+            if (traceMissileRain)
+                Logger.Info($"[MR-TRACE] damage-skip effect={Id} reason=skill-missed hitType={hitType}");
             var missPacket = new SCUnitDamagedPacket(castObj, casterObj, caster.ObjId, target.ObjId, 0, 0)
             {
                 HoldableId = (byte)(holdable?.HoldableTemplate?.Id ?? 0),
@@ -193,6 +209,8 @@ public class DamageEffect : EffectTemplate
             weaponDamage = ((Unit)caster).RangedDps * 0.001f + weaponDamage; // TODO : Use only weapon value!
 
         max = DpsMultiplier * weaponDamage + max;
+        if (traceMissileRain)
+            Logger.Info($"[MR-TRACE] damage-components effect={Id} levelMin={levelMin:F3} levelMax={levelMax:F3} dpsInc={dpsInc} dpsIncMul={DpsIncMultiplier:F3} weaponDamage={weaponDamage:F3} dpsMul={DpsMultiplier:F3} preScaleMax={max:F3}");
 
         var minCastBonus = 1000f;
         // Hack null-check on skill
@@ -216,6 +234,10 @@ public class DamageEffect : EffectTemplate
                 var scaledDamage = holdable.HoldableTemplate.DamageScale * variableDamage * 0.01f;
                 min = levelMin + (variableDamage - scaledDamage);
                 max = levelMax + (variableDamage + scaledDamage);
+            }
+            else if (traceMissileRain)
+            {
+                Logger.Info($"[MR-TRACE] damage-zero-cause effect={Id} reason=no-item-in-weapon-slot slot={WeaponSlotId}; min/max remain zero despite level/weapon components");
             }
         }
 
@@ -283,6 +305,9 @@ public class DamageEffect : EffectTemplate
             min = FixedMin;
             max = FixedMax;
         }
+
+        if (traceMissileRain)
+            Logger.Info($"[MR-TRACE] damage-bounds effect={Id} min={min:F3} max={max:F3} multiplier={Multiplier:F3} damageMul={damageMultiplier:F3} fixed={UseFixedDamage}");
 
         var finalDamage = Random.Shared.Next(min, max);
 
@@ -354,10 +379,17 @@ public class DamageEffect : EffectTemplate
         }
         // Safeguard to prevent accidental flagging
         else if (!caster.CanAttack(trg))
+        {
+            if (traceMissileRain)
+                Logger.Info($"[MR-TRACE] damage-skip effect={Id} reason=cannot-attack relation={caster.GetRelationStateTo(trg)} target={trg.ObjId} computedValue={value}");
             return;
+        }
 
         // TODO: Set proper kill reason
+        var hpBefore = trg.Hp;
         trg.ReduceCurrentHp(caster, value);
+        if (traceMissileRain)
+            Logger.Info($"[MR-TRACE] damage-applied effect={Id} target={trg.ObjId} hitType={hitType} finalDamage={finalDamage:F3} reduction={reductionMul:F3} value={value} absorbed={absorbed} hp={hpBefore}->{trg.Hp}");
         ((Unit)caster).SummarizeDamage += value;
 
         if (healthStolen > 0 || manaStolen > 0)
