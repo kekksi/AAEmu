@@ -50,6 +50,8 @@ public partial class Character : Unit, ICharacter
     private static readonly object MoneyExchangeLock = new();
     private long _money;
     private long _money2;
+    private readonly object _laborLock = new();
+    private int _reservedLaborPower;
 
     public List<IDisposable> Subscribers { get; set; }
     public override CharacterEvents Events { get; } = new();
@@ -67,13 +69,29 @@ public partial class Character : Unit, ICharacter
     /// </summary>
     public short LaborPower
     {
-        get => _laborPower;
+        get
+        {
+            lock (_laborLock)
+                return _laborPower;
+        }
         set
         {
-            if (_laborPower == value)
-                return;
-            _laborPower = value;
-            AccountManager.Instance.UpdateLabor(AccountId, value);
+            lock (_laborLock)
+            {
+                if (_laborPower == value)
+                    return;
+                _laborPower = value;
+                AccountManager.Instance.UpdateLabor(AccountId, value);
+            }
+        }
+    }
+
+    public int AvailableLaborPower
+    {
+        get
+        {
+            lock (_laborLock)
+                return Math.Max(0, _laborPower - _reservedLaborPower);
         }
     }
 
@@ -302,8 +320,12 @@ public partial class Character : Unit, ICharacter
 
     public void InitializeLaborCache(short labor, DateTime newTime)
     {
-        _laborPower = labor;
-        _laborPowerModified = newTime;
+        lock (_laborLock)
+        {
+            _laborPower = labor;
+            _reservedLaborPower = 0;
+            _laborPowerModified = newTime;
+        }
     }
 
     public bool InParty
@@ -1712,7 +1734,68 @@ public partial class Character : Unit, ICharacter
         _ => throw new ArgumentOutOfRangeException(nameof(moneyLocation))
     };
 
+    public bool TryReserveLaborPower(int amount)
+    {
+        if (amount < 0 || amount > short.MaxValue)
+            return false;
+
+        lock (_laborLock)
+        {
+            if (_laborPower - _reservedLaborPower < amount)
+                return false;
+
+            _reservedLaborPower += amount;
+            return true;
+        }
+    }
+
+    public bool CommitLaborPowerReservation(int amount, int actabilityId)
+    {
+        if (amount <= 0 || amount > short.MaxValue)
+            return amount == 0;
+
+        lock (_laborLock)
+        {
+            if (_reservedLaborPower < amount || _laborPower < amount)
+                return false;
+
+            ApplyLaborChange((short)-amount, actabilityId);
+            _reservedLaborPower -= amount;
+            return true;
+        }
+    }
+
+    public void ReleaseLaborPowerReservation(int amount)
+    {
+        if (amount <= 0)
+            return;
+
+        lock (_laborLock)
+            _reservedLaborPower = Math.Max(0, _reservedLaborPower - amount);
+    }
+
     public void ChangeLabor(short change, int actabilityId)
+    {
+        TryChangeLabor(change, actabilityId);
+    }
+
+    public bool TryChangeLabor(short change, int actabilityId)
+    {
+        lock (_laborLock)
+        {
+            if (change < 0 && _laborPower + change < _reservedLaborPower)
+            {
+                Logger.Warn("Labor change of {0} rejected for character {1} ({2}); {3} labor is reserved",
+                    change, Name, Id, _reservedLaborPower);
+                return false;
+            }
+
+            ApplyLaborChange(change, actabilityId);
+            return true;
+        }
+    }
+
+    private void ApplyLaborChange(short change, int actabilityId)
     {
         var actabilityChange = 0;
         byte actabilityStep = 0;

@@ -48,6 +48,9 @@ public class Skill
     public BaseUnit InitialTarget { get; set; }//Temp Hack Fix. Replace this with UnitsEffected
     private bool _bypassGcd;
     private int _costsCommitted;
+    private readonly object _laborReservationLock = new();
+    private Character _laborReservationOwner;
+    private int _reservedLaborPower;
     public bool Cancelled { get; set; } = false;
     public Action Callback { get; set; }
 
@@ -196,15 +199,19 @@ public class Skill
         // if (caster is Character)
         Logger.Debug($"Created SkillTlId {TlId} for Skill {Template.Id}, Caster {caster.Name} ({caster.TemplateId}:{caster.ObjId}) with target {target.Name} ({target.TemplateId}:{target.ObjId})");
 
-        // If skill uses Plots, then start the plot
-        if (Template.Plot != null)
+        // Plot-only skills bypass the normal cast path, so reserve and commit their startup costs here.
+        if (Template.Plot != null && Template.PlotOnly)
         {
-            if (Template.PlotOnly)
-                CommitCostsAndCooldowns(unit);
+            if (character != null && !TryReserveLaborPower(character))
+            {
+                SkillTlIdManager.ReleaseId(TlId);
+                TlId = 0;
+                return SkillResult.NeedLaborPower;
+            }
 
+            CommitCostsAndCooldowns(unit);
             Task.Run(() => Template.Plot.RunAsync(caster, casterCaster, target, targetCaster, skillObject, this));
-            if (Template.PlotOnly)
-                return SkillResult.Success;
+            return SkillResult.Success;
         }
 
         // Check if target is within range
@@ -302,6 +309,16 @@ public class Skill
                 }
             }
         }
+
+        if (character != null && !TryReserveLaborPower(character))
+        {
+            SkillTlIdManager.ReleaseId(TlId);
+            TlId = 0;
+            return SkillResult.NeedLaborPower;
+        }
+
+        if (Template.Plot != null)
+            Task.Run(() => Template.Plot.RunAsync(caster, casterCaster, target, targetCaster, skillObject, this));
 
         // Calculate casting time if needed
         var castTime = 0;
@@ -709,12 +726,14 @@ public class Skill
                 if (useItem == null)
                 {
                     Logger.Warn("SkillItem does not exists {0} (templateId: {1})", castItem.ItemId, castItem.ItemTemplateId);
+                    ReleaseLaborPowerReservation();
                     return; // Item does not exists
                 }
 
                 if (useItem._holdingContainer.OwnerId != player.Id)
                 {
                     Logger.Warn("SkillItem {0} (itemId:{1}) is not owned by player {2} ({3})", useItem.Template.Name, useItem.Id, player.Name, player.Id);
+                    ReleaseLaborPowerReservation();
                     return; // Item is not in the player's possessions
                 }
 
@@ -723,6 +742,7 @@ public class Skill
                 if (itemCount < itemsRequired)
                 {
                     Logger.Warn("SkillItem, player does not own enough of {0} (count: {1}/{2}, templateId: {3})", useItem.Id, itemCount, itemsRequired, castItem.ItemTemplateId);
+                    ReleaseLaborPowerReservation();
                     return; // not enough of item
                 }
             }
@@ -1389,22 +1409,7 @@ public class Skill
 
         if (caster is Character character)
         {
-            var laborCost = Template.ConsumeLaborPower;
-            // Adjust labor cost if needed
-            if (character.Actability.Actabilities.TryGetValue((byte)Template.ActabilityGroupId, out var actAbility))
-            {
-                laborCost = (int)Math.Round(laborCost * actAbility.GetLaborCostMultiplier());
-            }
-
-            // Lower cap at 1
-            if (Template.ConsumeLaborPower > 0 && laborCost < 1)
-                laborCost = 1;
-
-            if (laborCost > 0 && !Cancelled && character.LaborPower >= laborCost)
-            {
-                // Consume labor only if there is enough of it
-                character.ChangeLabor((short)-laborCost, Template.ActabilityGroupId);
-            }
+            CompleteLaborPowerReservation(character, Cancelled);
 
             // Add vocation where needed
             if (Template.GainLifePoint > 0 && !Cancelled)
@@ -1447,6 +1452,7 @@ public class Skill
         unit.OnSkillEnd(this);
         unit.SkillTask = null;
         Cancelled = true;
+        ReleaseLaborPowerReservation();
         SkillTlIdManager.ReleaseId(TlId);
         TlId = 0;
 
@@ -1545,6 +1551,89 @@ AlwaysHit:
         }
         Logger.Error($"Unit[{objId}] was not found in the CbtDiceRolls.");
         return true;
+    }
+
+    /// <summary>
+    /// Reserves the adjusted labor cost before any plot or effect starts. The reservation is
+    /// committed by EndSkill, or released by every cancellation path.
+    /// </summary>
+    private bool TryReserveLaborPower(Character character)
+    {
+        var laborCost = GetLaborPowerCost(character);
+        if (laborCost <= 0)
+            return true;
+
+        lock (_laborReservationLock)
+        {
+            if (_laborReservationOwner != null)
+                return false;
+            if (!character.TryReserveLaborPower(laborCost))
+                return false;
+
+            _laborReservationOwner = character;
+            _reservedLaborPower = laborCost;
+            return true;
+        }
+    }
+
+    private int GetLaborPowerCost(Character character)
+    {
+        var laborCost = Template.ConsumeLaborPower;
+        if (laborCost <= 0)
+            return 0;
+
+        if (character.Actability.Actabilities.TryGetValue((byte)Template.ActabilityGroupId, out var actAbility))
+            laborCost = (int)Math.Round(laborCost * actAbility.GetLaborCostMultiplier());
+
+        return Math.Max(1, laborCost);
+    }
+
+    private bool CommitLaborPowerReservation(Character character)
+    {
+        lock (_laborReservationLock)
+        {
+            if (_laborReservationOwner == null || _reservedLaborPower <= 0)
+                return true;
+            if (_laborReservationOwner != character)
+            {
+                _laborReservationOwner.ReleaseLaborPowerReservation(_reservedLaborPower);
+                _laborReservationOwner = null;
+                _reservedLaborPower = 0;
+                return false;
+            }
+
+            var laborCost = _reservedLaborPower;
+            var committed = character.CommitLaborPowerReservation(laborCost, Template.ActabilityGroupId);
+            if (!committed)
+                character.ReleaseLaborPowerReservation(laborCost);
+
+            _laborReservationOwner = null;
+            _reservedLaborPower = 0;
+            return committed;
+        }
+    }
+
+    private void ReleaseLaborPowerReservation()
+    {
+        lock (_laborReservationLock)
+        {
+            _laborReservationOwner?.ReleaseLaborPowerReservation(_reservedLaborPower);
+            _laborReservationOwner = null;
+            _reservedLaborPower = 0;
+        }
+    }
+
+    internal void CompleteLaborPowerReservation(BaseUnit caster, bool cancelled)
+    {
+        if (cancelled || caster is not Character character)
+        {
+            ReleaseLaborPowerReservation();
+            return;
+        }
+
+        if (!CommitLaborPowerReservation(character))
+            Logger.Error("Failed to commit reserved labor for skill {0}, caster {1} ({2})",
+                Template.Id, character.Name, character.Id);
     }
 
     /// <summary>

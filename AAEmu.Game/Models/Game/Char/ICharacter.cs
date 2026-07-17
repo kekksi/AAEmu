@@ -29,6 +29,10 @@ public interface ICharacter : IUnit
     void SendDebugMessage(string message);
     void SendErrorMessage(ErrorMessageType errorMsgType, uint type = 0, bool isNotify = true);
     void ChangeLabor(short change, int actabilityId);
+    bool TryChangeLabor(short change, int actabilityId);
+    bool TryReserveLaborPower(int amount);
+    bool CommitLaborPowerReservation(int amount, int actabilityId);
+    void ReleaseLaborPowerReservation(int amount);
     void AddExp(int expDelta, bool shouldAddAbilityExp);
     public bool ChangeMoney(SlotType typeFrom, SlotType typeTo, int amount, ItemTaskType itemTaskType = ItemTaskType.DepositMoney);
     public bool TrySpendMoney(SlotType moneyLocation, long amount, ItemTaskType itemTaskType = ItemTaskType.DepositMoney);

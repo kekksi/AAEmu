@@ -281,6 +281,8 @@ public class PlotTree(uint plotId)
     {
         state.Caster?.BroadcastPacket(new SCPlotEndedPacket(state.ActiveSkill.TlId), true);
         EndPlotChannel(state);
+        state.ActiveSkill.CompleteLaborPowerReservation(state.Caster,
+            state.CancellationRequested() || state.ActiveSkill.Cancelled);
 
         if (state.Caster is Character { IgnoreSkillCooldowns: true } character)
             character.ResetSkillCooldown(state.ActiveSkill.Template.Id, false);
