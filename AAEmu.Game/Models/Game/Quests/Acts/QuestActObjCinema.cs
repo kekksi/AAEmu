@@ -28,6 +28,8 @@ public class QuestActObjCinema(QuestComponentTemplate parentComponent) : QuestAc
     public override void InitializeAction(Quest quest, QuestAct questAct)
     {
         base.InitializeAction(quest, questAct);
+        if (quest.Owner is Character player)
+            player.PendingCinemaId = CinemaId;
         quest.Owner.Events.OnCinemaStarted += questAct.OnCinemaStarted;
         quest.Owner.Events.OnCinemaEnded += questAct.OnCinemaEnded;
     }

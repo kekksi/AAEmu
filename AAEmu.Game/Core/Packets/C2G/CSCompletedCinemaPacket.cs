@@ -24,6 +24,7 @@ public class CSCompletedCinemaPacket() : GamePacket(CSOffsets.CSCompletedCinemaP
         // camera and depth-of-field blur.
         character.Events.OnCinemaEnded(character, new OnCinemaEndedArgs { CinemaId = cinemaId });
         character.CurrentlyPlayingCinemaId = 0;
+        character.PendingCinemaId = 0;
         WorldManager.ResendVisibleObjectsToCharacter(character);
     }
 }

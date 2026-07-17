@@ -229,6 +229,11 @@ public partial class Character : Unit, ICharacter
     public uint CurrentlyPlayingCinemaId { get; set; }
 
     /// <summary>
+    /// Cinema requested by a quest component or effect, before the client confirms playback
+    /// </summary>
+    public uint PendingCinemaId { get; set; }
+
+    /// <summary>
     /// Current instant game (arena/battlefield) the character is in
     /// </summary>
     public InstantGame.InstantGame CurrentInstantGame { get; set; }
