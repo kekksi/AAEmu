@@ -79,6 +79,15 @@ public class SkillManager(IAnimationManager animationManager, IPlotManager plotM
     }
     */
 
+    public List<SkillTemplate> GetSkillsByAbility(AbilityType ability, int maxAbLevel)
+    {
+        var list = new List<SkillTemplate>();
+        foreach (var s in _skills.Values)
+            if (s.AbilityId == ability && s.AbilityLevel > 0 && s.AbilityLevel <= maxAbLevel)
+                list.Add(s);
+        return list;
+    }
+
     public SkillTemplate GetSkillTemplate(uint id)
     {
         return _skills.GetValueOrDefault(id);
