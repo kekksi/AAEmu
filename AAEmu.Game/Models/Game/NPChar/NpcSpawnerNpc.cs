@@ -105,6 +105,10 @@ public class NpcSpawnerNpc : Spawner<Npc>
             {
                 npcSpawner.Position.Z = newZ;
             }
+            else if (Math.Abs(heightAboveGround) < 1f)
+            {
+                npcSpawner.Position.Z = newZ;
+            }
         }
 
         npc.Transform.ApplyWorldSpawnPosition(npcSpawner.Position);
