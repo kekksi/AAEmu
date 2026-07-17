@@ -14,6 +14,8 @@ public static class SkillTargetingUtil
                 return units;
             case SkillTargetRelation.Friendly:
                 return units.Where(o => caster.GetRelationStateTo(o) == RelationState.Friendly && !caster.CanAttack(o));
+            case SkillTargetRelation.OwnerFriendly:
+                return units.Where(o => caster.GetRelationStateTo(o) == RelationState.Friendly);
             case SkillTargetRelation.Hostile:
                 return units.Where(caster.CanAttack);
             case SkillTargetRelation.Party:
@@ -38,6 +40,8 @@ public static class SkillTargetingUtil
                 return true;
             case SkillTargetRelation.Friendly:
                 return caster?.GetRelationStateTo(target) == RelationState.Friendly && !caster.CanAttack(target);
+            case SkillTargetRelation.OwnerFriendly:
+                return caster?.GetRelationStateTo(target) == RelationState.Friendly;
             case SkillTargetRelation.Hostile:
                 return caster.CanAttack(target);
             case SkillTargetRelation.Party:

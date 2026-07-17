@@ -413,7 +413,13 @@ public class BuffTemplate
         else if (ownerUnit != null && !units.Contains(owner))
             units.Add(ownerUnit);
 
-        units = SkillTargetingUtil.FilterWithRelation((SkillTargetRelation)TickAreaRelationId, (Unit)caster, units).ToList();
+        var relation = (SkillTargetRelation)TickAreaRelationId;
+        // Relation 6 is used by contagious debuffs such as Electric Shock: the tick affects
+        // the debuffed owner and that owner's allies, not every unit around the owner.
+        var relationSource = relation == SkillTargetRelation.OwnerFriendly ? ownerUnit : caster as Unit;
+        if (relationSource == null)
+            return;
+        units = SkillTargetingUtil.FilterWithRelation(relation, relationSource, units).ToList();
 
         var source = caster;
         //if (TickAreaUseOriginSource)
