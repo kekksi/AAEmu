@@ -1,5 +1,5 @@
 ﻿using System.Collections.Concurrent;
-using System.Text;
+using System.Net;
 using AAEmu.Commons.Exceptions;
 using AAEmu.Commons.Network;
 using AAEmu.Commons.Network.Core;
@@ -10,7 +10,11 @@ namespace AAEmu.Game.Core.Network.Stream;
 
 public class StreamProtocolHandler : BaseProtocolHandler
 {
+    private const long InvalidFrameLogWindowMs = 10_000;
+    private const int MaxTrackedInvalidFrameIps = 4_096;
+
     private static Logger Logger { get; } = LogManager.GetCurrentClassLogger();
+    private static readonly ConcurrentDictionary<IPAddress, long> InvalidFrameLogTimes = new();
 
     private readonly ConcurrentDictionary<uint, Type> _packets = new();
 
@@ -91,6 +95,13 @@ public class StreamProtocolHandler : BaseProtocolHandler
                     continue;
                 }
 
+                // A stream frame must at least contain its two-byte packet type.
+                if (len < sizeof(ushort))
+                {
+                    RejectInvalidFrame(connection, $"invalid payload length {len}");
+                    return;
+                }
+
                 var packetLen = len + stream.Pos;
                 if (packetLen <= stream.Count)
                 {
@@ -111,7 +122,8 @@ public class StreamProtocolHandler : BaseProtocolHandler
                     _packets.TryGetValue(type, out var classType);
                     if (classType == null)
                     {
-                        HandleUnknownPacket(connection, type, stream2);
+                        RejectInvalidFrame(connection, $"unknown packet type 0x{type:x4}");
+                        return;
                     }
                     else
                     {
@@ -130,8 +142,7 @@ public class StreamProtocolHandler : BaseProtocolHandler
         }
         catch (Exception e)
         {
-            connection?.Shutdown();
-            Logger.Error(e);
+            RejectInvalidFrame(connection, "packet decode failed", e);
         }
     }
 
@@ -142,11 +153,65 @@ public class StreamProtocolHandler : BaseProtocolHandler
         _packets.TryAdd(type, classType);
     }
 
-    private static void HandleUnknownPacket(StreamConnection connection, uint type, PacketStream stream)
+    private static void RejectInvalidFrame(StreamConnection connection, string reason, Exception exception = null)
     {
-        var dump = new StringBuilder();
-        for (var i = stream.Pos; i < stream.Count; i++)
-            dump.AppendFormat("{0:x2} ", stream.Buffer[i]);
-        Logger.Error("Unknown packet 0x{0:x2} from {1}:\n{2}", (object)type, (object)connection.Ip, (object)dump);
+        if (connection == null)
+            return;
+
+        connection.LastPacket = null;
+        connection.Shutdown();
+
+        if (!ShouldLogInvalidFrame(connection.Ip))
+            return;
+
+        if (exception == null)
+            Logger.Warn("Rejected malformed stream frame from {0}: {1}; connection closed", connection.Ip, reason);
+        else
+            Logger.Warn(exception, "Rejected malformed stream frame from {0}: {1}; connection closed", connection.Ip, reason);
+    }
+
+    private static bool ShouldLogInvalidFrame(IPAddress ip)
+    {
+        var now = Environment.TickCount64;
+        while (true)
+        {
+            if (!InvalidFrameLogTimes.TryGetValue(ip, out var lastLogged))
+            {
+                if (!InvalidFrameLogTimes.TryAdd(ip, now))
+                    continue;
+
+                TrimInvalidFrameLogTimes(now);
+                return true;
+            }
+
+            if (now - lastLogged < InvalidFrameLogWindowMs)
+                return false;
+
+            if (InvalidFrameLogTimes.TryUpdate(ip, now, lastLogged))
+            {
+                TrimInvalidFrameLogTimes(now);
+                return true;
+            }
+        }
+    }
+
+    private static void TrimInvalidFrameLogTimes(long now)
+    {
+        if (InvalidFrameLogTimes.Count <= MaxTrackedInvalidFrameIps)
+            return;
+
+        foreach (var entry in InvalidFrameLogTimes)
+        {
+            if (now - entry.Value >= InvalidFrameLogWindowMs)
+                InvalidFrameLogTimes.TryRemove(entry.Key, out _);
+        }
+
+        // Keep spoofed source addresses from turning the limiter itself into unbounded state.
+        foreach (var ip in InvalidFrameLogTimes.Keys)
+        {
+            if (InvalidFrameLogTimes.Count <= MaxTrackedInvalidFrameIps)
+                break;
+            InvalidFrameLogTimes.TryRemove(ip, out _);
+        }
     }
 }
