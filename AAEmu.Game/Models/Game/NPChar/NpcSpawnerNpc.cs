@@ -98,17 +98,10 @@ public class NpcSpawnerNpc : Spawner<Npc>
         {
             var newZ = npcSpawner.ParentWorld.Template.GeoData.GetHeight(npcSpawner.Position.AsPositionVector());
             var heightAboveGround = npcSpawner.Position.Z - newZ;
-            // Snap non-flying NPCs down onto the terrain when they spawn floating above it.
-            // The old code only corrected sub-1m differences, so NPCs whose data Z was several
-            // metres above the heightmap stayed floating (bug #1425). Now: snap when the NPC is
-            // ABOVE ground within a sane range and the heightmap returned a plausible value.
-            // Leaves cave NPCs (below ground), NPCs on tall structures (far above), and areas
-            // with no heightmap data (newZ ~0) untouched.
-            if (newZ > 50f && heightAboveGround > 0f && heightAboveGround < 30f)
-            {
-                npcSpawner.Position.Z = newZ;
-            }
-            else if (Math.Abs(heightAboveGround) < 1f)
+            // Snap non-flying NPCs to terrain when their data Z is within 30m of the heightmap.
+            // The symmetric threshold raises buried surface NPCs while preserving caves and
+            // dungeons whose data Z is 30m or more below the surface.
+            if (newZ > 50f && Math.Abs(heightAboveGround) < 30f)
             {
                 npcSpawner.Position.Z = newZ;
             }
