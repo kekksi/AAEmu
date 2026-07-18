@@ -34,6 +34,10 @@ public class CSExecuteCraft() : GamePacket(CSOffsets.CSExecuteCraft, 1)
             return;
         }
 
-        character.Craft.Craft(craft, count, objId);
+        if (!character.Craft.TryStartCraft(craft, count, objId))
+        {
+            Logger.Warn("Rejected concurrent craft request: character {0}, craftId {1}", character.Id, craftId);
+            character.SendErrorMessage(ErrorMessageType.CraftCantActAnyMore);
+        }
     }
 }

@@ -9,6 +9,7 @@ using AAEmu.Game.Models.Game.Items;
 using AAEmu.Game.Models.Game.Items.Actions;
 using AAEmu.Game.Models.Game.Items.Templates;
 using AAEmu.Game.Models.Game.Skills;
+using AAEmu.Game.Models.Game.Skills.Static;
 using AAEmu.Game.Models.Tasks.Skills;
 using MySql.Data.MySqlClient;
 using NLog;
@@ -18,8 +19,12 @@ namespace AAEmu.Game.Models.Game.Char;
 public class CharacterCraft(Character owner)
 {
     private static Logger Logger { get; } = LogManager.GetCurrentClassLogger();
+    private readonly Lock _craftStartLock = new();
     private readonly Lock _learnedCraftsLock = new();
     private readonly HashSet<uint> _learnedCrafts = [];
+    private readonly Action<Craft, int, uint> _craftStartOverride;
+    private bool _craftInFlight;
+    private Skill _activeCraftSkill;
 
     private int Count { get; set; }
     private Craft CurrentCraft { get; set; }
@@ -29,7 +34,20 @@ public class CharacterCraft(Character owner)
     private uint DoodadId { get; set; }
     private int ConsumeLaborPower { get; set; }
     private Character Owner => owner;
-    public bool IsCrafting { get; set; }
+    public bool IsCrafting
+    {
+        get
+        {
+            lock (_craftStartLock)
+                return _craftInFlight;
+        }
+    }
+
+    internal CharacterCraft(Character owner, Action<Craft, int, uint> craftStartOverride)
+        : this(owner)
+    {
+        _craftStartOverride = craftStartOverride;
+    }
 
     public bool LearnedCraft(uint craftId)
     {
@@ -85,11 +103,59 @@ public class CharacterCraft(Character owner)
             Owner.SendPacket(new Core.Packets.G2C.SCCraftItemUnlockPacket(craftId));
     }
 
-    public void Craft(Craft craft, int count, uint doodadId)
+    public bool TryStartCraft(Craft craft, int count, uint doodadId)
     {
         if (craft == null || count <= 0)
         {
             Owner.SendErrorMessage(ErrorMessageType.CraftInvalidCraftType);
+            return false;
+        }
+
+        lock (_craftStartLock)
+        {
+            if (_craftInFlight)
+                return false;
+
+            _craftInFlight = true;
+            try
+            {
+                StartCraft(craft, count, doodadId);
+                return true;
+            }
+            catch
+            {
+                ReleaseCraftGuard();
+                throw;
+            }
+        }
+    }
+
+    internal void ContinueCraft(Craft craft, int count, uint doodadId)
+    {
+        lock (_craftStartLock)
+        {
+            if (!_craftInFlight)
+                return;
+
+            try
+            {
+                StartCraft(craft, count, doodadId);
+            }
+            catch
+            {
+                ReleaseCraftGuard();
+                throw;
+            }
+        }
+    }
+
+    public void ReleaseCraftGuardOnDisconnect() => ReleaseCraftGuard();
+
+    private void StartCraft(Craft craft, int count, uint doodadId)
+    {
+        if (_craftStartOverride != null)
+        {
+            _craftStartOverride(craft, count, doodadId);
             return;
         }
 
@@ -167,8 +233,6 @@ public class CharacterCraft(Character owner)
             return;
         }
 
-        IsCrafting = true;
-
         var caster = SkillCaster.GetByType(SkillCasterType.Unit);
         caster.ObjId = Owner.ObjId;
 
@@ -185,6 +249,8 @@ public class CharacterCraft(Character owner)
         }
 
         var skill = new Skill(skillTemplate);
+        _activeCraftSkill = skill;
+        skill.Callback = () => ReleaseCraftGuardIfActive(skill);
         ConsumeLaborPower = skill.Template.ConsumeLaborPower;
         var speedMultiplier = 1f;
         if (craft.AcId > 0)
@@ -200,13 +266,14 @@ public class CharacterCraft(Character owner)
             }
         }
         skill.CastTimeMultiplier = speedMultiplier;
-        skill.Use(Owner, caster, target, null, false, out _);
+        var skillResult = skill.Use(Owner, caster, target, null, false, out _);
+        if (skillResult != SkillResult.Success)
+            ReleaseCraftGuardIfActive(skill);
     }
 
     public void EndCraft()
     {
         Count--;
-        IsCrafting = false;
 
         if (CurrentCraft == null)
         {
@@ -414,15 +481,31 @@ public class CharacterCraft(Character owner)
         var nextCraftDelay = timeToGlobalCooldown.TotalMilliseconds > skillTemplate.CooldownTime
             ? timeToGlobalCooldown
             : TimeSpan.FromMilliseconds(skillTemplate.CooldownTime);
-        TaskManager.Instance.Schedule(newCraft, nextCraftDelay);
+        lock (_craftStartLock)
+        {
+            _activeCraftSkill = null;
+            try
+            {
+                TaskManager.Instance.Schedule(newCraft, nextCraftDelay);
+            }
+            catch
+            {
+                _craftInFlight = false;
+                throw;
+            }
+        }
     }
 
     private void CancelCraft()
     {
-        IsCrafting = false;
-        CurrentCraft = null;
-        Count = 0;
-        DoodadId = 0;
+        lock (_craftStartLock)
+        {
+            _craftInFlight = false;
+            _activeCraftSkill = null;
+            CurrentCraft = null;
+            Count = 0;
+            DoodadId = 0;
+        }
 
         // Also cancel the related skill ? I don't think this really does anything for crafts, but can't hurt I guess
         if (Owner != null)
@@ -433,6 +516,27 @@ public class CharacterCraft(Character owner)
         }
 
         // Might want to send a packet here, I think there is a packet when crafting fails. Not sure yet.
+    }
+
+    private void ReleaseCraftGuardIfActive(Skill skill)
+    {
+        lock (_craftStartLock)
+        {
+            if (!ReferenceEquals(_activeCraftSkill, skill))
+                return;
+
+            _craftInFlight = false;
+            _activeCraftSkill = null;
+        }
+    }
+
+    private void ReleaseCraftGuard()
+    {
+        lock (_craftStartLock)
+        {
+            _craftInFlight = false;
+            _activeCraftSkill = null;
+        }
     }
 
     /// <summary>

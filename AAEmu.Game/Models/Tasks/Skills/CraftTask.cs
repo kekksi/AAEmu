@@ -12,7 +12,7 @@ public class CraftTask(Character character, uint craftId, uint objId, int count)
         {
             // _character.SendMessage($"CraftTask: {_craftId}");
             if (character != null && CraftManager.Instance.TryGetCraftById(craftId, out var craft))
-                character.Craft.Craft(craft, count, objId);
+                character.Craft.ContinueCraft(craft, count, objId);
         }
     }
 }

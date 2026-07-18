@@ -202,6 +202,10 @@ public class GameConnection
         if (activeChar == null)
             return;
 
+        // A disconnected character cannot submit another request. Releasing only the
+        // in-flight gate leaves any already-running craft item path untouched.
+        activeChar.Craft?.ReleaseCraftGuardOnDisconnect();
+
         // Remove Radars
         RadarManager.Instance.UnRegister(activeChar);
 
