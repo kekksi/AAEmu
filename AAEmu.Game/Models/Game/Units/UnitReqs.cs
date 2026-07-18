@@ -91,9 +91,9 @@ public class UnitReqs
             case UnitReqsKindType.TargetCombat:
                 return Ret(SkillResultKeys.skill_urk_target_combat, targetUnit is { IsInBattle: false });
 
-            // case UnitReqsKindType.CanLearnCraft:
-            //     // Learnable crafts is not implemented
-            //     return ret(SkillResultKeys.skill_urk_can_learn_craft, player != null && !player.Craft.LearnedCraft(Value1));
+            case UnitReqsKindType.CanLearnCraft:
+                return Ret(SkillResultKeys.skill_urk_can_learn_craft,
+                    player != null && !player.Craft.LearnedCraft(Value1));
 
             case UnitReqsKindType.DoodadRange:
                 if (owner == null)

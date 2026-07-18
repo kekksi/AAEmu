@@ -2796,6 +2796,7 @@ public partial class Character : Unit, ICharacter
 
         using (var connection = MySQL.CreateConnection())
         {
+            Craft.Load(connection);
             // Inventory.Load(connection);
             Abilities = new CharacterAbilities(this);
             Abilities.Load(connection);
@@ -3015,6 +3016,7 @@ public partial class Character : Unit, ICharacter
             Friends?.Save(connection, transaction);
             Blocked?.Save(connection, transaction);
             Skills?.Save(connection, transaction);
+            Craft?.Save(connection, transaction);
             Quests?.Save(connection, transaction);
             Mates?.Save(connection, transaction);
             

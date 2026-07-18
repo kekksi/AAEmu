@@ -10,6 +10,7 @@ using AAEmu.Game.Models.Game.Items.Actions;
 using AAEmu.Game.Models.Game.Items.Templates;
 using AAEmu.Game.Models.Game.Skills;
 using AAEmu.Game.Models.Tasks.Skills;
+using MySql.Data.MySqlClient;
 using NLog;
 
 namespace AAEmu.Game.Models.Game.Char;
@@ -17,6 +18,8 @@ namespace AAEmu.Game.Models.Game.Char;
 public class CharacterCraft(Character owner)
 {
     private static Logger Logger { get; } = LogManager.GetCurrentClassLogger();
+    private readonly Lock _learnedCraftsLock = new();
+    private readonly HashSet<uint> _learnedCrafts = [];
 
     private int Count { get; set; }
     private Craft CurrentCraft { get; set; }
@@ -27,6 +30,60 @@ public class CharacterCraft(Character owner)
     private int ConsumeLaborPower { get; set; }
     private Character Owner => owner;
     public bool IsCrafting { get; set; }
+
+    public bool LearnedCraft(uint craftId)
+    {
+        lock (_learnedCraftsLock)
+            return _learnedCrafts.Contains(craftId);
+    }
+
+    public bool TryLearnCraft(uint craftId)
+    {
+        lock (_learnedCraftsLock)
+            return _learnedCrafts.Add(craftId);
+    }
+
+    public void Load(MySqlConnection connection)
+    {
+        lock (_learnedCraftsLock)
+        {
+            _learnedCrafts.Clear();
+            using var command = connection.CreateCommand();
+            command.CommandText = "SELECT `craft_id` FROM `learned_crafts` WHERE `owner` = @owner";
+            command.Parameters.AddWithValue("@owner", Owner.Id);
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+                _learnedCrafts.Add(reader.GetUInt32("craft_id"));
+        }
+    }
+
+    public void Save(MySqlConnection connection, MySqlTransaction transaction)
+    {
+        uint[] learnedCrafts;
+        lock (_learnedCraftsLock)
+            learnedCrafts = _learnedCrafts.ToArray();
+
+        using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = "INSERT IGNORE INTO `learned_crafts` (`owner`, `craft_id`) VALUES (@owner, @craft_id)";
+        command.Parameters.AddWithValue("@owner", Owner.Id);
+        var craftIdParameter = command.Parameters.Add("@craft_id", MySqlDbType.UInt32);
+        foreach (var craftId in learnedCrafts)
+        {
+            craftIdParameter.Value = craftId;
+            command.ExecuteNonQuery();
+        }
+    }
+
+    public void SendLearnedCrafts()
+    {
+        uint[] learnedCrafts;
+        lock (_learnedCraftsLock)
+            learnedCrafts = _learnedCrafts.ToArray();
+
+        foreach (var craftId in learnedCrafts)
+            Owner.SendPacket(new Core.Packets.G2C.SCCraftItemUnlockPacket(craftId));
+    }
 
     public void Craft(Craft craft, int count, uint doodadId)
     {

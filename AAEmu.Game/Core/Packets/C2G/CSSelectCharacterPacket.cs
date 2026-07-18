@@ -62,6 +62,7 @@ public class CSSelectCharacterPacket() : GamePacket(CSOffsets.CSSelectCharacterP
 
             Connection.ActiveChar.Quests.Send();
             Connection.ActiveChar.Quests.SendCompleted();
+            Connection.ActiveChar.Craft.SendLearnedCrafts();
 
             Connection.ActiveChar.Actability.Send();
             Connection.ActiveChar.Mails.SendUnreadMailCount();

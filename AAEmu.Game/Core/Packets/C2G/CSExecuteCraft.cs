@@ -27,6 +27,13 @@ public class CSExecuteCraft() : GamePacket(CSOffsets.CSExecuteCraft, 1)
             return;
         }
 
+        if (CraftManager.Instance.IsLearnableCraft(craftId) && !character.Craft.LearnedCraft(craftId))
+        {
+            Logger.Warn("Rejected unlearned craft request: character {0}, craftId {1}", character.Id, craftId);
+            character.SendErrorMessage(ErrorMessageType.CraftNotLearned);
+            return;
+        }
+
         character.Craft.Craft(craft, count, objId);
     }
 }

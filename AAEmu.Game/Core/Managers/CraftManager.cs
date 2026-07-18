@@ -10,10 +10,14 @@ public class CraftManager : Singleton<CraftManager>, ICraftManager
     private static Logger Logger { get; } = LogManager.GetCurrentClassLogger();
 
     private Dictionary<uint, Craft> _crafts;
+    private Dictionary<uint, uint> _recipeCraftsByItem;
+    private HashSet<uint> _learnableCrafts;
 
     public void Load()
     {
         _crafts = [];
+        _recipeCraftsByItem = [];
+        _learnableCrafts = [];
         Logger.Info("Loading crafts...");
 
         using (var connection = SQLite.CreateConnection())
@@ -113,9 +117,58 @@ public class CraftManager : Singleton<CraftManager>, ICraftManager
                     }
                 }
             }
+
+            var invalidRecipeCount = 0;
+            using (var command = connection.CreateCommand())
+            {
+                command.CommandText =
+                    "SELECT DISTINCT ir.item_id, ir.craft_id " +
+                    "FROM item_recipes ir " +
+                    "JOIN items i ON i.id = ir.item_id " +
+                    "JOIN skill_effects se ON se.skill_id = i.use_skill_id " +
+                    "JOIN effects e ON e.id = se.effect_id " +
+                    "WHERE e.actual_type = 'TrainCraftEffect'";
+                command.Prepare();
+                using (var reader = new SQLiteWrapperReader(command.ExecuteReader()))
+                {
+                    while (reader.Read())
+                    {
+                        var itemId = reader.GetUInt32("item_id");
+                        var craftId = reader.GetUInt32("craft_id");
+                        if (!_crafts.ContainsKey(craftId))
+                        {
+                            invalidRecipeCount++;
+                            continue;
+                        }
+
+                        _recipeCraftsByItem[itemId] = craftId;
+                        _learnableCrafts.Add(craftId);
+                    }
+                }
+            }
+
+            // Older training skills identify the craft directly instead of through a recipe item.
+            using (var command = connection.CreateCommand())
+            {
+                command.CommandText = "SELECT craft_id FROM train_craft_effects";
+                command.Prepare();
+                using (var reader = new SQLiteWrapperReader(command.ExecuteReader()))
+                {
+                    while (reader.Read())
+                    {
+                        var craftId = reader.GetUInt32("craft_id");
+                        if (_crafts.ContainsKey(craftId))
+                            _learnableCrafts.Add(craftId);
+                    }
+                }
+            }
+
+            if (invalidRecipeCount > 0)
+                Logger.Warn("Ignored {0} item recipe references to missing crafts", invalidRecipeCount);
         }
 
-        Logger.Info("Loaded crafts", _crafts.Count);
+        Logger.Info("Loaded {0} crafts, {1} recipe items and {2} learnable crafts", _crafts.Count,
+            _recipeCraftsByItem.Count, _learnableCrafts.Count);
     }
 
     public Craft GetCraftById(uint craftId)
@@ -126,5 +179,15 @@ public class CraftManager : Singleton<CraftManager>, ICraftManager
     public bool TryGetCraftById(uint craftId, out Craft craft)
     {
         return _crafts.TryGetValue(craftId, out craft);
+    }
+
+    public bool TryGetCraftIdByRecipeItem(uint itemId, out uint craftId)
+    {
+        return _recipeCraftsByItem.TryGetValue(itemId, out craftId);
+    }
+
+    public bool IsLearnableCraft(uint craftId)
+    {
+        return _learnableCrafts.Contains(craftId);
     }
 }

@@ -449,6 +449,14 @@ CREATE TABLE IF NOT EXISTS `skills` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='Learned character skills';
 
 
+CREATE TABLE IF NOT EXISTS `learned_crafts` (
+  `owner` int unsigned NOT NULL,
+  `craft_id` int unsigned NOT NULL,
+  `learned_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`owner`,`craft_id`) USING BTREE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='Craft recipes learned by characters';
+
+
 CREATE TABLE IF NOT EXISTS `uccs` (
   `id` int NOT NULL AUTO_INCREMENT,
   `uploader_id` int NOT NULL COMMENT 'PlayerID',
