@@ -10,6 +10,7 @@ using AAEmu.Game.Models.Game.Char;
 using AAEmu.Game.Models.Game.Chat;
 using AAEmu.Game.Models.Game.Team;
 using AAEmu.Game.Models.StaticValues;
+using AAEmu.Game.Services.Telemetry;
 
 using NLog;
 
@@ -164,6 +165,9 @@ public class EnterWorldManager(
     {
         if (activeChar != null)
         {
+            if (connection?.TryEndTelemetrySession() == true)
+                TelemetryEmitter.EmitSession(activeChar, connection.Id, "logout", leaveWorldTarget.ToString());
+
             activeChar.DisabledSetPosition = true;
             activeChar.IsOnline = false;
             activeChar.LeaveTime = DateTime.UtcNow;

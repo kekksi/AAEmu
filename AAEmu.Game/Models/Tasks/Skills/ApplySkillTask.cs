@@ -28,6 +28,8 @@ public class ApplySkillTask(
             // in its casting/attack state indefinitely.
             Logger.Error(e, "Failed to apply delayed effects for skill {0} (tlId {1}, caster {2})",
                 skill.Template?.Id, skill.TlId, caster?.ObjId);
+            skill.EmitHandledException(e, caster, "skill_delayed_effect");
+            skill.CompleteTelemetry("error", "effect_exception");
         }
         finally
         {

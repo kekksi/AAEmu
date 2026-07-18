@@ -3,6 +3,7 @@ using AAEmu.Game.Core.Managers;
 using AAEmu.Game.Core.Network.Game;
 using AAEmu.Game.Core.Packets.G2C;
 using AAEmu.Game.Models.Game.Chat;
+using AAEmu.Game.Services.Telemetry;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
@@ -34,5 +35,7 @@ public class CSNotifyInGamePacket() : GamePacket(CSOffsets.CSNotifyInGamePacket,
 
         TrialManager.Instance.HandlePlayerLogin(Connection.ActiveChar);
         Logger.Info($"NotifyInGame: {Connection.ActiveChar?.Name} ({Connection.ActiveChar?.Id})");
+        if (Connection.TryStartTelemetrySession())
+            TelemetryEmitter.EmitSession(Connection.ActiveChar, Connection.Id, "login");
     }
 }

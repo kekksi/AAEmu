@@ -10,6 +10,7 @@ using AAEmu.Game.Models.Game.NPChar;
 using AAEmu.Game.Models.Game.Skills.Static;
 using AAEmu.Game.Models.Game.Skills.Templates;
 using AAEmu.Game.Models.Game.Units;
+using AAEmu.Game.Services.Telemetry;
 
 namespace AAEmu.Game.Models.Game.Skills.Effects;
 
@@ -79,6 +80,7 @@ public class DamageEffect : EffectTemplate
         var trg = target as Unit;
         if (trg == null || trg.Hp <= 0)
         {
+            source?.Skill?.RecordTelemetryDamage(SkillDamageResult.Skipped, zeroReason: "invalid_or_dead_target");
             if (traceMissileRain)
                 Logger.Info($"[MR-TRACE] damage-skip effect={Id} reason=invalid-or-dead-target targetType={target?.GetType().Name} targetHp={trg?.Hp}");
             return;
@@ -89,6 +91,7 @@ public class DamageEffect : EffectTemplate
         var casterUnit = caster as Unit ?? source?.Caster;
         if (casterUnit == null)
         {
+            source?.Skill?.RecordTelemetryDamage(SkillDamageResult.Skipped, zeroReason: "missing_unit_caster");
             Logger.Warn($"No Unit caster defined for DamageEffect {Id}, with targetObjId {target.ObjId} ({target})");
             if (traceMissileRain)
                 Logger.Info($"[MR-TRACE] damage-skip effect={Id} reason=null-caster");
@@ -109,6 +112,7 @@ public class DamageEffect : EffectTemplate
 
         if (target.Buffs.CheckDamageImmune(DamageType))
         {
+            source?.Skill?.RecordTelemetryDamage(SkillDamageResult.Immune);
             if (traceMissileRain)
                 Logger.Info($"[MR-TRACE] damage-skip effect={Id} reason=immune target={target.ObjId}");
             target.BroadcastPacket(new SCUnitDamagedPacket(castObj, casterObj, caster.ObjId, target.ObjId, 1, 0)
@@ -127,6 +131,7 @@ public class DamageEffect : EffectTemplate
         if ((source?.Skill?.HitTypes.TryGetValue(trg.ObjId, out hitType) ?? false)
             && (source?.Skill.SkillMissed(trg.ObjId) ?? false))
         {
+            source.Skill.RecordTelemetryDamage(SkillDamageResult.Avoided);
             if (traceMissileRain)
                 Logger.Info($"[MR-TRACE] damage-skip effect={Id} reason=skill-missed hitType={hitType}");
             var missPacket = new SCUnitDamagedPacket(castObj, casterObj, caster.ObjId, target.ObjId, 0, 0)
@@ -383,6 +388,7 @@ public class DamageEffect : EffectTemplate
         // Safeguard to prevent accidental flagging
         else if (!caster.CanAttack(trg))
         {
+            source?.Skill?.RecordTelemetryDamage(SkillDamageResult.Skipped, zeroReason: "not_attackable");
             if (traceMissileRain)
                 Logger.Info($"[MR-TRACE] damage-skip effect={Id} reason=cannot-attack relation={caster.GetRelationStateTo(trg)} target={trg.ObjId} computedValue={value}");
             return;
@@ -391,6 +397,22 @@ public class DamageEffect : EffectTemplate
         // TODO: Set proper kill reason
         var hpBefore = trg.Hp;
         trg.ReduceCurrentHp(caster, value);
+        var dealtDamage = Math.Max(0, hpBefore - trg.Hp);
+        var zeroReason = dealtDamage > 0
+            ? null
+            : value > 0
+                ? "damage_not_applied"
+                : weapon == null && WeaponSlotId >= 0
+                    ? "missing_weapon"
+                    : max <= 0
+                        ? "non_positive_damage_bounds"
+                        : reductionMul <= 0
+                            ? "fully_mitigated"
+                            : "rounded_to_zero";
+        source?.Skill?.RecordTelemetryDamage(
+            dealtDamage > 0 ? SkillDamageResult.Positive : SkillDamageResult.Zero,
+            dealtDamage,
+            zeroReason);
         if (traceMissileRain)
             Logger.Info($"[MR-TRACE] damage-applied effect={Id} target={trg.ObjId} hitType={hitType} finalDamage={finalDamage:F3} reduction={reductionMul:F3} value={value} absorbed={absorbed} hp={hpBefore}->{trg.Hp}");
         ((Unit)caster).SummarizeDamage += value;

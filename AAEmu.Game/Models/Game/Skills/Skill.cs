@@ -27,6 +27,7 @@ using AAEmu.Game.Models.Game.Units;
 using AAEmu.Game.Models.StaticValues;
 using AAEmu.Game.Physics;
 using AAEmu.Game.Models.Tasks.Skills;
+using AAEmu.Game.Services.Telemetry;
 using AAEmu.Game.Utils;
 
 using NLog;
@@ -51,6 +52,7 @@ public class Skill
     private readonly object _laborReservationLock = new();
     private Character _laborReservationOwner;
     private int _reservedLaborPower;
+    private SkillTelemetryState _telemetryState;
     public bool Cancelled { get; set; } = false;
     public Action Callback { get; set; }
 
@@ -210,6 +212,7 @@ public class Skill
             }
 
             CommitCostsAndCooldowns(unit);
+            BeginTelemetry(caster, target);
             Task.Run(() => Template.Plot.RunAsync(caster, casterCaster, target, targetCaster, skillObject, this));
             return SkillResult.Success;
         }
@@ -316,6 +319,8 @@ public class Skill
             TlId = 0;
             return SkillResult.NeedLaborPower;
         }
+
+        BeginTelemetry(caster, target);
 
         if (Template.Plot != null)
             Task.Run(() => Template.Plot.RunAsync(caster, casterCaster, target, targetCaster, skillObject, this));
@@ -765,6 +770,7 @@ public class Skill
     public void StopSkill(BaseUnit caster)
     {
         if (caster is not Unit unit) { return; }
+        CompleteTelemetry("cancelled", "stopped");
 
         if (unit.AutoAttackTask != null)
             unit.AutoAttackTask.Cancelled = true;
@@ -879,6 +885,8 @@ public class Skill
                 // when one malformed effect fails.
                 Logger.Error(e, "Failed to apply immediate effects for skill {0} (tlId {1}, caster {2})",
                     Template.Id, TlId, caster.ObjId);
+                EmitHandledException(e, caster, "skill_immediate_effect");
+                CompleteTelemetry("error", "effect_exception");
             }
             finally
             {
@@ -1407,6 +1415,8 @@ public class Skill
         if (caster is not Unit unit)
             return;
 
+        CompleteTelemetry(Cancelled ? "cancelled" : null, Cancelled ? "cancelled" : null);
+
         if (caster is Character character)
         {
             CompleteLaborPowerReservation(character, Cancelled);
@@ -1437,6 +1447,7 @@ public class Skill
     public void Stop(BaseUnit caster, Doodad channelDoodad = null, SkillCaster casterCaster = null)
     {
         if (caster is not Unit unit) { return; }
+        CompleteTelemetry("cancelled", "interrupted");
         if (Template.ChannelingTime > 0)
         {
             EndChanneling(caster, channelDoodad, casterCaster);
@@ -1458,6 +1469,50 @@ public class Skill
 
         if (caster is Character character && character.IgnoreSkillCooldowns)
             character.ResetSkillCooldown(Template.Id, false);
+    }
+
+    internal void RecordTelemetryDamage(SkillDamageResult result, int damage = 0, string zeroReason = null)
+    {
+        try
+        {
+            Volatile.Read(ref _telemetryState)?.RecordDamage(result, damage, zeroReason);
+        }
+        catch
+        {
+            // Telemetry must never affect damage application.
+        }
+    }
+
+    internal void CompleteTelemetry(string forcedOutcome = null, string zeroReason = null)
+    {
+        try
+        {
+            Interlocked.Exchange(ref _telemetryState, null)?.Complete(forcedOutcome, zeroReason);
+        }
+        catch
+        {
+            // Telemetry must never affect skill cleanup.
+        }
+    }
+
+    internal void EmitHandledException(Exception exception, BaseUnit caster, string source)
+    {
+        var character = caster?.GetOwnerCharacter();
+        TelemetryEmitter.EmitException(exception, true, source, character, Template?.Id, InitialTarget?.ObjId);
+    }
+
+    private void BeginTelemetry(BaseUnit caster, BaseUnit target)
+    {
+        try
+        {
+            var next = SkillTelemetryState.Begin(Template, caster, target);
+            var previous = Interlocked.Exchange(ref _telemetryState, next);
+            previous?.Complete("timeout", "overlapping_cast");
+        }
+        catch
+        {
+            // Telemetry must never reject a cast.
+        }
     }
 
     public SkillHitType RollCombatDice(BaseUnit attacker, BaseUnit target)

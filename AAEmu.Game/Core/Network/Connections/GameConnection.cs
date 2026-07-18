@@ -9,6 +9,7 @@ using AAEmu.Game.Core.Network.Game;
 using AAEmu.Game.Models;
 using AAEmu.Game.Models.Game.Char;
 using AAEmu.Game.Models.Game.Housing;
+using AAEmu.Game.Services.Telemetry;
 
 namespace AAEmu.Game.Core.Network.Connections;
 
@@ -30,6 +31,7 @@ public class GameConnection
     public Task LeaveTask { get; set; }
     public CancellationTokenSource CancelTokenSource { get; set; }
     public DateTime LastPing { get; set; }
+    private int _telemetrySessionOpen;
 
     public GameConnection(ISession session)
     {
@@ -74,6 +76,9 @@ public class GameConnection
     /// </summary>
     public void OnDisconnect()
     {
+        if (ActiveChar != null && TryEndTelemetrySession())
+            TelemetryEmitter.EmitSession(ActiveChar, Id, "unexpected_disconnect", "socket_closed");
+
         AccountManager.Instance.Remove(AccountId);
 
         if (ActiveChar != null)
@@ -106,6 +111,12 @@ public class GameConnection
     {
         _session?.Close();
     }
+
+    public bool TryStartTelemetrySession() =>
+        Interlocked.CompareExchange(ref _telemetrySessionOpen, 1, 0) == 0;
+
+    public bool TryEndTelemetrySession() =>
+        Interlocked.CompareExchange(ref _telemetrySessionOpen, 0, 1) == 1;
 
     /// <summary>
     /// Adds a named attribute object to the connection 

@@ -1,5 +1,6 @@
 using AAEmu.Game;
 using AAEmu.Game.Core.Managers;
+using AAEmu.Game.Services.Telemetry;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Time.Testing;
@@ -17,7 +18,8 @@ public class GameServiceTests
         var fakeTime = new FakeTimeProvider();
         var sp = Mock.Of<IServiceProvider>().Object;
         var orchestrator = new ManagerOrchestrator(sp, new ServiceCollection());
-        using var service = new GameService(sp, orchestrator, fakeTime);
+        using var telemetry = new TelemetryService();
+        using var service = new GameService(sp, orchestrator, fakeTime, telemetry);
 
         await Assert.That(GameService.StartTime).IsEqualTo(fakeTime.GetUtcNow().UtcDateTime);
     }
@@ -28,7 +30,8 @@ public class GameServiceTests
         var fakeTime = new FakeTimeProvider();
         var sp = Mock.Of<IServiceProvider>().Object;
         var orchestrator = new ManagerOrchestrator(sp, new ServiceCollection());
-        using var service = new GameService(sp, orchestrator, fakeTime);
+        using var telemetry = new TelemetryService();
+        using var service = new GameService(sp, orchestrator, fakeTime, telemetry);
 
         fakeTime.Advance(TimeSpan.FromSeconds(5));
 
@@ -40,7 +43,8 @@ public class GameServiceTests
     {
         var sp = Mock.Of<IServiceProvider>().Object;
         var orchestrator = new ManagerOrchestrator(sp, new ServiceCollection());
-        using var service = new GameService(sp, orchestrator, TimeProvider.System);
+        using var telemetry = new TelemetryService();
+        using var service = new GameService(sp, orchestrator, TimeProvider.System, telemetry);
 
         await Assert.That(service).IsAssignableTo<IHostedService>();
     }
@@ -50,7 +54,8 @@ public class GameServiceTests
     {
         var sp = Mock.Of<IServiceProvider>().Object;
         var orchestrator = new ManagerOrchestrator(sp, new ServiceCollection());
-        using var service = new GameService(sp, orchestrator, TimeProvider.System);
+        using var telemetry = new TelemetryService();
+        using var service = new GameService(sp, orchestrator, TimeProvider.System, telemetry);
 
         await Assert.That(service).IsAssignableTo<IDisposable>();
     }
@@ -60,7 +65,8 @@ public class GameServiceTests
     {
         var sp = Mock.Of<IServiceProvider>().Object;
         var orchestrator = new ManagerOrchestrator(sp, new ServiceCollection());
-        using var service = new GameService(sp, orchestrator, TimeProvider.System);
+        using var telemetry = new TelemetryService();
+        using var service = new GameService(sp, orchestrator, TimeProvider.System, telemetry);
 
         service.Dispose();
         await Task.CompletedTask; // Suppress warning

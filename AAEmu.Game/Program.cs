@@ -9,6 +9,7 @@ using AAEmu.Game.Core.Managers.World;
 using AAEmu.Game.GameData.Framework;
 using AAEmu.Game.Models;
 using AAEmu.Game.Services;
+using AAEmu.Game.Services.Telemetry;
 using AAEmu.Game.Services.WebApi;
 using AAEmu.Game.Utils.DB;
 using AAEmu.Game.Utils.Scripts;
@@ -92,6 +93,7 @@ public static class Program
         }
 
         AppDomain.CurrentDomain.UnhandledException += OnUnhandledException;
+        TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;
 
         var builder = new HostBuilder()
             .ConfigureAppConfiguration((hostingContext, config) =>
@@ -110,6 +112,11 @@ public static class Program
                 services.AddSingleton(TimeProvider.System);
 
                 // -- Hosted services --
+                // Telemetry starts first so hooks can enqueue immediately. Its writer waits
+                // for GameService to finish schema updates before touching MariaDB; hosted
+                // services stop in reverse order, so it flushes after the game service.
+                services.AddSingleton<TelemetryService>();
+                services.AddSingleton<IHostedService>(sp => sp.GetRequiredService<TelemetryService>());
                 services.AddSingleton<IHostedService, GameService>();
                 services.AddSingleton<IHostedService, WebApiService>();
                 services.AddSingleton<IHostedService, DiscordBotService>();
@@ -492,7 +499,17 @@ public static class Program
 
     private static void OnUnhandledException(object sender, UnhandledExceptionEventArgs e)
     {
-        var exceptionStr = e.ExceptionObject.ToString();
+        TelemetryEmitter.EmitException(
+            e.ExceptionObject as Exception ?? new InvalidOperationException(e.ExceptionObject?.ToString() ?? "Unknown exception object"),
+            false,
+            "app_domain",
+            isTerminating: e.IsTerminating);
+        var exceptionStr = e.ExceptionObject?.ToString() ?? "Unknown exception object";
         Logger.Fatal(exceptionStr);
+    }
+
+    private static void OnUnobservedTaskException(object sender, UnobservedTaskExceptionEventArgs e)
+    {
+        TelemetryEmitter.EmitException(e.Exception, false, "task_scheduler_unobserved");
     }
 }

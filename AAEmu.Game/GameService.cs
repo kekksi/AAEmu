@@ -15,6 +15,7 @@ using AAEmu.Game.GameData.Framework;
 using AAEmu.Game.IO;
 using AAEmu.Game.Models;
 using AAEmu.Game.Models.Game;
+using AAEmu.Game.Services.Telemetry;
 using AAEmu.Game.Utils.Scripts;
 
 using Microsoft.Extensions.Hosting;
@@ -31,11 +32,17 @@ public sealed class GameService : IHostedService, IDisposable
     public static TimeSpan TimeSinceStart => s_timeProvider.GetUtcNow().UtcDateTime.Subtract(StartTime);
 
     private readonly ManagerOrchestrator _orchestrator;
+    private readonly TelemetryService _telemetryService;
 
-    public GameService(IServiceProvider serviceProvider, ManagerOrchestrator orchestrator, TimeProvider timeProvider)
+    public GameService(
+        IServiceProvider serviceProvider,
+        ManagerOrchestrator orchestrator,
+        TimeProvider timeProvider,
+        TelemetryService telemetryService)
     {
         SingletonContainer.ServiceProvider = serviceProvider;
         _orchestrator = orchestrator;
+        _telemetryService = telemetryService;
         s_timeProvider = timeProvider;
         StartTime = timeProvider.GetUtcNow().UtcDateTime;
     }
@@ -55,6 +62,8 @@ public sealed class GameService : IHostedService, IDisposable
                 return;
             }
         }
+
+        _telemetryService.MarkDatabaseReady();
 
         ClientFileManager.Initialize();
         if (ClientFileManager.Sources.Count == 0)

@@ -64,6 +64,8 @@ public class PlotNode
             {
                 state?.Caster?.SendPacket(new SCChatMessagePacket(Chat.ChatType.Notice, "Plot Effects Error - Check Logs"));
                 Logger.Error("[Plot Effects Error]: {0}\n{1}", e.Message, e.StackTrace);
+                state?.ActiveSkill?.EmitHandledException(e, state.Caster, "skill_plot_effect");
+                state?.ActiveSkill?.CompleteTelemetry("error", "plot_effect_exception");
             }
         }
 

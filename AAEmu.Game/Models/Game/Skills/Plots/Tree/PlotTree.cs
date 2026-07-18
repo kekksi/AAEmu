@@ -165,6 +165,8 @@ public class PlotTree(uint plotId)
         catch (Exception e)
         {
             Logger.Error($"Main Loop Error: {e.Message}\n {e.StackTrace}");
+            state?.ActiveSkill?.EmitHandledException(e, state.Caster, "skill_plot_loop");
+            state?.ActiveSkill?.CompleteTelemetry("error", "plot_exception");
         }
 
         DoPlotEnd(state);
@@ -279,6 +281,12 @@ public class PlotTree(uint plotId)
 
     private static void DoPlotEnd(PlotState state)
     {
+        if (state.ActiveSkill.Template.PlotOnly)
+        {
+            state.ActiveSkill.CompleteTelemetry(
+                state.CancellationRequested() || state.ActiveSkill.Cancelled ? "cancelled" : null,
+                state.CancellationRequested() || state.ActiveSkill.Cancelled ? "plot_cancelled" : null);
+        }
         state.Caster?.BroadcastPacket(new SCPlotEndedPacket(state.ActiveSkill.TlId), true);
         EndPlotChannel(state);
         state.ActiveSkill.CompleteLaborPowerReservation(state.Caster,

@@ -6,6 +6,7 @@ using AAEmu.Commons.Network;
 using AAEmu.Commons.Network.Core;
 using AAEmu.Game.Core.Managers.World;
 using AAEmu.Game.Core.Network.Connections;
+using AAEmu.Game.Services.Telemetry;
 
 using NLog;
 
@@ -45,6 +46,7 @@ public class GameProtocolHandler : BaseProtocolHandler
         {
             session.Close();
             Logger.Error(e);
+            TelemetryEmitter.EmitException(e, true, "game_connect");
         }
     }
 
@@ -78,6 +80,7 @@ public class GameProtocolHandler : BaseProtocolHandler
         {
             session.Close();
             Logger.Error(e);
+            TelemetryEmitter.EmitException(e, true, "game_disconnect");
         }
 
         Logger.Info($"Client from {session.Ip} disconnected");
@@ -107,6 +110,7 @@ public class GameProtocolHandler : BaseProtocolHandler
         {
             session.Close();
             Logger.Error(e);
+            TelemetryEmitter.EmitException(e, true, "game_receive");
         }
     }
 
@@ -195,6 +199,7 @@ public class GameProtocolHandler : BaseProtocolHandler
         {
             connection?.Shutdown();
             Logger.Error(e);
+            TelemetryEmitter.EmitException(e, true, "game_packet", connection?.ActiveChar);
         }
     }
 
