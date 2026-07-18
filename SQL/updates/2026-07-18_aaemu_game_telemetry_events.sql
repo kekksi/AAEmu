@@ -1,5 +1,5 @@
 USE aaemu_game;
-+CREATE TABLE IF NOT EXISTS `telemetry_events` (
+CREATE TABLE IF NOT EXISTS `telemetry_events` (
     `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     `occurred_at` DATETIME(6) NOT NULL,
     `received_at` DATETIME(6) NOT NULL,
