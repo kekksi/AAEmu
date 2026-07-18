@@ -52,8 +52,11 @@ public class AiPathHandler(NpcAi aiOwner)
             }
         }
 
+        var ownerPosition = Owner.Owner.Transform.World.Position;
+        var movementTarget = GetMovementTarget(TargetPosition, ownerPosition, Owner.Owner.CanFly);
+
         // Are we there yet?
-        if (TargetPosition != Vector3.Zero && MathUtil.CalculateDistance(TargetPosition, Owner.Owner.Transform.World.Position, true) < Owner.Owner.Template.Scale)
+        if (TargetPosition != Vector3.Zero && MathUtil.CalculateDistance(movementTarget, ownerPosition, true) < Owner.Owner.Template.Scale)
         {
             TargetPosition = Vector3.Zero;
         }
@@ -91,6 +94,7 @@ public class AiPathHandler(NpcAi aiOwner)
             if (!nextPos.Position.Equals(Vector3.Zero))
             {
                 TargetPosition = nextPos.Position;
+                movementTarget = GetMovementTarget(TargetPosition, ownerPosition, Owner.Owner.CanFly);
             }
         }
 
@@ -99,15 +103,29 @@ public class AiPathHandler(NpcAi aiOwner)
         {
             var moveSpeed = Owner.GetRealMovementSpeed(AiPathSpeed);
             // var moveFlags = Owner.GetRealMovementFlags(moveSpeed);
-            moveSpeed *= delta.Milliseconds / 1000.0;
-            Owner.Owner.MoveTowards(TargetPosition, (float)moveSpeed, AiPathActorFlags);
-            // Owner.Owner.MoveTowards(TargetPosition, AiPathSpeed * Owner.Owner.BaseMoveSpeed * (delta.Milliseconds / 1000.0f), AiPathStanceFlags);
+            var stepDistance = CalculateStepDistance(moveSpeed, delta);
+            Owner.Owner.MoveTowards(movementTarget, stepDistance, AiPathActorFlags);
 
             // Move the idle "home" location along with the path, so it doesn't immediately trigger a return to home state when going into combat
             Owner.IdlePosition = Owner.Owner.Transform.World.Position;
         }
 
         return HasUnhandledPathMovementData();
+    }
+
+    /// <summary>
+    /// Ground NPC movement is terrain-clamped by Npc.MoveTowards. Ignore stale waypoint
+    /// heights so a vertical mismatch cannot keep a patrol on the same X/Y forever.
+    /// Flying NPCs still follow the full 3D waypoint.
+    /// </summary>
+    internal static Vector3 GetMovementTarget(Vector3 pathTarget, Vector3 ownerPosition, bool canFly)
+    {
+        return canFly ? pathTarget : new Vector3(pathTarget.X, pathTarget.Y, ownerPosition.Z);
+    }
+
+    internal static float CalculateStepDistance(double moveSpeed, TimeSpan delta)
+    {
+        return (float)(moveSpeed * Math.Max(0d, delta.TotalSeconds));
     }
 
     public bool HasUnhandledPathMovementData()
