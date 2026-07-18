@@ -562,17 +562,23 @@ public partial class Quest : PacketMarshaler
         for (var i = 0; i < MaxObjectiveCount; i++)
             newObjectives[i] = stream.ReadInt32();
 
-        // Read Current Step
-        Step = (QuestComponentKind)stream.ReadByte();
+        var persistedStep = (QuestComponentKind)stream.ReadByte();
+        var persistedAcceptorType = (QuestAcceptorType)stream.ReadByte();
+        var persistedComponentId = stream.ReadUInt32();
+        var persistedAcceptorId = stream.ReadUInt32();
+        var persistedDeadline = stream.ReadDateTime();
 
-        // Reset objectives counts only after setting the step, or they will reset
+        // Restore the deadline before activating the persisted step. Timed quest acts
+        // initialize while Step is assigned and must schedule only the remaining time.
+        QuestAcceptorType = persistedAcceptorType;
+        AcceptorId = persistedAcceptorId;
+        Time = persistedDeadline;
+        Step = persistedStep;
+        ComponentId = persistedComponentId;
+
+        // Reset objective counts only after setting the step, or they will reset.
         for (var i = 0; i < MaxObjectiveCount; i++)
             Objectives[i] = newObjectives[i];
-
-        QuestAcceptorType = (QuestAcceptorType)stream.ReadByte();
-        ComponentId = stream.ReadUInt32();
-        AcceptorId = stream.ReadUInt32();
-        Time = stream.ReadDateTime();
     }
 
     public byte[] WriteData()

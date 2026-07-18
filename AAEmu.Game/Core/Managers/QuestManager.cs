@@ -1953,16 +1953,22 @@ public partial class QuestManager(ITaskManager taskManager, IZoneManager zoneMan
             return false;
         }
 
-        // Fill in the new end time for this quest
-        quest.Time = DateTime.UtcNow.AddMilliseconds(limitTime);
+        // A loaded quest already carries its absolute deadline. Only newly accepted
+        // quests need a new deadline; reconnects must schedule the remaining duration.
+        var now = DateTime.UtcNow;
+        var deadline = quest.Time == default ? now.AddMilliseconds(limitTime) : quest.Time;
+        var remainingTime = deadline - now;
+        if (remainingTime < TimeSpan.Zero)
+            remainingTime = TimeSpan.Zero;
+        quest.Time = deadline;
 
         // Create new Task and add them to the dictionary for this player
         var timeoutTask = new QuestTimeoutTask(owner, quest.TemplateId);
         playerTimerTasks.Add(quest.TemplateId, timeoutTask);
 
         // Actually schedule the task
-        taskManager.Schedule(timeoutTask, TimeSpan.FromMilliseconds(limitTime));
-        owner.SendDebugMessage($"[Quest] Quest ({quest.Id}) will end in {limitTime / 60000} minutes.");
+        taskManager.Schedule(timeoutTask, remainingTime);
+        owner.SendDebugMessage($"[Quest] Quest ({quest.Id}) will end in {(int)remainingTime.TotalMinutes} minutes.");
         return true;
     }
 

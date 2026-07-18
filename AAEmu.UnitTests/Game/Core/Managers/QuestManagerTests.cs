@@ -59,6 +59,64 @@ public class QuestManagerTests
     }
 
     [Test]
+    public async Task AddQuestTimer_WithPersistedDeadline_SchedulesRemainingTime()
+    {
+        var taskManager = new RecordingTaskManager();
+        var manager = CreateManager(taskManager);
+        var owner = Mock.Of<ICharacter>();
+        owner.Id.Returns(1u);
+        var deadline = DateTime.UtcNow.AddSeconds(30);
+        var quest = new Quest(
+            null,
+            owner.Object,
+            Mock.Of<IQuestManager>().Object,
+            Mock.Of<ITaskManager>().Object,
+            Mock.Of<ISkillManager>().Object,
+            Mock.Of<IExpressTextManager>().Object,
+            Mock.Of<IWorldManager>().Object)
+        {
+            TemplateId = 42u,
+            Time = deadline
+        };
+
+        var result = manager.AddQuestTimer(owner.Object, quest, 60_000);
+
+        await Assert.That(result).IsTrue();
+        await Assert.That(quest.Time).IsEqualTo(deadline);
+        await Assert.That(taskManager.StartDelay).IsNotNull();
+        await Assert.That(taskManager.StartDelay!.Value).IsGreaterThan(TimeSpan.FromSeconds(20));
+        await Assert.That(taskManager.StartDelay.Value).IsLessThan(TimeSpan.FromSeconds(40));
+    }
+
+    [Test]
+    public async Task AddQuestTimer_WithExpiredDeadline_SchedulesImmediately()
+    {
+        var taskManager = new RecordingTaskManager();
+        var manager = CreateManager(taskManager);
+        var owner = Mock.Of<ICharacter>();
+        owner.Id.Returns(1u);
+        var deadline = DateTime.UtcNow.AddMinutes(-1);
+        var quest = new Quest(
+            null,
+            owner.Object,
+            Mock.Of<IQuestManager>().Object,
+            Mock.Of<ITaskManager>().Object,
+            Mock.Of<ISkillManager>().Object,
+            Mock.Of<IExpressTextManager>().Object,
+            Mock.Of<IWorldManager>().Object)
+        {
+            TemplateId = 42u,
+            Time = deadline
+        };
+
+        var result = manager.AddQuestTimer(owner.Object, quest, 60_000);
+
+        await Assert.That(result).IsTrue();
+        await Assert.That(quest.Time).IsEqualTo(deadline);
+        await Assert.That(taskManager.StartDelay).IsEqualTo(TimeSpan.Zero);
+    }
+
+    [Test]
     public async Task EnqueueEvaluation_SchedulesOneDelayedEvaluation()
     {
         var taskManager = new RecordingTaskManager();
