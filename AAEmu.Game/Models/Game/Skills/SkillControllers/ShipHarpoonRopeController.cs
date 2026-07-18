@@ -64,6 +64,45 @@ public static class ShipHarpoonRopeController
 
     private static readonly ConcurrentDictionary<uint, RopeTensionHistory> _tensionHistoryByHarpoonObjId = new();
 
+    internal enum RopeControllerAction
+    {
+        None,
+        Launch,
+        Cut
+    }
+
+    /// <summary>
+    /// Route every mounted 1.2 Rope controller through the existing server rope lifecycle.
+    /// Launch rows carry a positive lifetime in value1/value2; cut rows contain zeroes.
+    /// </summary>
+    public static void OnMountedSkillSucceeded(Slave harpoonSlave, SkillTemplate? skill,
+        SkillCastTarget target, Character? operatorChar)
+    {
+        if (skill == null || SkillManager.Instance.GetEffectTemplate(skill.SkillControllerId, "SkillController")
+            is not SkillControllerTemplate controller)
+            return;
+
+        switch (ClassifyController(controller))
+        {
+            case RopeControllerAction.Launch:
+                OnLaunchSucceeded(harpoonSlave, target, operatorChar);
+                break;
+            case RopeControllerAction.Cut:
+                OnCutRope(harpoonSlave, operatorChar);
+                break;
+        }
+    }
+
+    internal static RopeControllerAction ClassifyController(SkillControllerTemplate? controller)
+    {
+        if (controller?.KindId != SkillControllerKindRope)
+            return RopeControllerAction.None;
+
+        return controller.Value[0] > 0 || controller.Value[1] > 0
+            ? RopeControllerAction.Launch
+            : RopeControllerAction.Cut;
+    }
+
     public static void OnLaunchSucceeded(Slave harpoonSlave, SkillCastTarget target, Character? operatorChar)
     {
         if (!TryResolveHookFromSkillTarget(target, harpoonSlave, out var hookWorld, out var hookBasisObjId, out var hookLocal))

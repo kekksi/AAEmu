@@ -107,10 +107,8 @@ public class CSStartSkillPacket() : GamePacket(CSOffsets.CSStartSkillPacket, 1)
             }
             else if (slave != null)
             {
-                if (skillId == HarpoonMechanicsDebug.ShipLaunchHarpoonSkillId)
-                    ShipHarpoonRopeController.OnLaunchSucceeded(slave, skillCastTarget, Connection.ActiveChar);
-                else if (skillId == HarpoonMechanicsDebug.ShipCutHarpoonRopeSkillId)
-                    ShipHarpoonRopeController.OnCutRope(slave, Connection.ActiveChar);
+                ShipHarpoonRopeController.OnMountedSkillSucceeded(
+                    slave, skill.Template, skillCastTarget, Connection.ActiveChar);
             }
 
             // If no rider/operator skill is linked, we can stop here
