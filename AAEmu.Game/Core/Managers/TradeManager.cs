@@ -355,9 +355,11 @@ public class TradeManager(ITradeIdManager tradeIdManager, IWorldManager worldMan
         {
             foreach (var item in tradeInfo.OwnerItems)
             {
+                // AddOrMoveExistingItem mutates the item to its destination slot.
+                var sourceRemoval = new ItemRemove(item);
                 if (target.Inventory.Bag.AddOrMoveExistingItem(ItemTaskType.Invalid, item))
                 {
-                    tasksOwner.Add(new ItemRemove(item));
+                    tasksOwner.Add(sourceRemoval);
                     tasksTarget.Add(new ItemAdd(item));
                 }
                 else
@@ -371,9 +373,11 @@ public class TradeManager(ITradeIdManager tradeIdManager, IWorldManager worldMan
         {
             foreach (var item in tradeInfo.TargetItems)
             {
+                // AddOrMoveExistingItem mutates the item to its destination slot.
+                var sourceRemoval = new ItemRemove(item);
                 if (owner.Inventory.Bag.AddOrMoveExistingItem(ItemTaskType.Invalid, item))
                 {
-                    tasksTarget.Add(new ItemRemove(item));
+                    tasksTarget.Add(sourceRemoval);
                     tasksOwner.Add(new ItemAdd(item));
                 }
                 else

@@ -546,6 +546,7 @@ public class Inventory
                 var ni = ItemManager.Instance.Create(fromItem.TemplateId, count, fromItem.Grade, true);
                 ni.SlotType = toType;
                 ni.Slot = toSlot;
+                ni.OwnerId = targetContainer.OwnerId;
                 ni._holdingContainer = targetContainer;
                 targetContainer.Items.Add(ni);
                 itemTasks.Add(new ItemAdd(ni));
