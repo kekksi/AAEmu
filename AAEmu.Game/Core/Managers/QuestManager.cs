@@ -442,7 +442,11 @@ public partial class QuestManager(ITaskManager taskManager, IZoneManager zoneMan
     private void LoadQuestComponents(SqliteConnection connection)
     {
         using var command = connection.CreateCommand();
-        command.CommandText = "SELECT * FROM quest_components ORDER BY quest_context_id, component_kind_id, id";
+        command.CommandText =
+            "SELECT quest_components.*, skills.id AS referenced_skill_id " +
+            "FROM quest_components " +
+            "LEFT JOIN skills ON skills.id = quest_components.skill_id " +
+            "ORDER BY quest_context_id, component_kind_id, quest_components.id";
         command.Prepare();
         using var reader = new SQLiteWrapperReader(command.ExecuteReader());
         while (reader.Read())
@@ -451,14 +455,22 @@ public partial class QuestManager(ITaskManager taskManager, IZoneManager zoneMan
             if (!_questTemplates.TryGetValue(questId, out var questTemplate))
                 continue;
 
+            var componentId = reader.GetUInt32("id");
+            var skillId = reader.GetUInt32("skill_id", 0);
+            if (skillId > 0 && reader.IsDBNull("referenced_skill_id"))
+            {
+                Logger.Warn($"Quest {questId} component {componentId} references missing skill {skillId}; ignoring invalid step skill");
+                skillId = 0;
+            }
+
             var template = new QuestComponentTemplate(questTemplate)
             {
-                Id = reader.GetUInt32("id"),
+                Id = componentId,
                 KindId = (QuestComponentKind)reader.GetByte("component_kind_id"),
                 NextComponent = reader.GetUInt32("next_component", 0),
                 NpcAiId = (QuestNpcAiName)reader.GetUInt32("npc_ai_id", 0),
                 NpcId = reader.GetUInt32("npc_id", 0),
-                SkillId = reader.GetUInt32("skill_id", 0),
+                SkillId = skillId,
                 SkillSelf = reader.GetBoolean("skill_self", true),
                 AiPathName = reader.GetString("ai_path_name", string.Empty),
                 AiPathTypeId = (PathType)reader.GetUInt32("ai_path_type_id"),
