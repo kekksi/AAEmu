@@ -22,8 +22,33 @@ public class CashShopBuyTask(byte buyMode, Character buyer, Character targetPlay
         // Calculate costs (of all different types in the cart)
         // Don't think this is actually possible to mix currencies in the cart, but let's handle it anyway
         var costs = new uint[(byte)CashShopCurrencyType.Max];
+        bool IsSupportedCurrency(CashShopCurrencyType currency)
+        {
+            return currency is CashShopCurrencyType.Credits or CashShopCurrencyType.AaPoints
+                or CashShopCurrencyType.Loyalty or CashShopCurrencyType.Coins;
+        }
+
         foreach (var sku in shoppingCart)
-            costs[(byte)sku.Currency] += sku.DiscountPrice > 0 ? sku.DiscountPrice : sku.Price;
+        {
+            if (!IsSupportedCurrency(sku.Currency))
+            {
+                Logger.Error($"Invalid Currency {sku.Currency}");
+                buyer.SendErrorMessage(ErrorMessageType.IngameShopBuyFail);
+                buyer.SendPacket(new SCICSBuyResultPacket(false, buyMode, targetPlayer.Name, 0));
+                return;
+            }
+
+            var effectivePrice = sku.DiscountPrice > 0 ? sku.DiscountPrice : sku.Price;
+            if (effectivePrice > int.MaxValue || costs[(byte)sku.Currency] > uint.MaxValue - effectivePrice)
+            {
+                Logger.Error($"Invalid cash shop price {effectivePrice} for {sku.Currency}");
+                buyer.SendErrorMessage(ErrorMessageType.IngameShopBuyFail);
+                buyer.SendPacket(new SCICSBuyResultPacket(false, buyMode, targetPlayer.Name, 0));
+                return;
+            }
+
+            costs[(byte)sku.Currency] += effectivePrice;
+        }
 
         var beforeBuyAccountDetails = AccountManager.Instance.GetAccountDetails(buyer.AccountId);
         // Check Credits
@@ -156,6 +181,15 @@ public class CashShopBuyTask(byte buyMode, Character buyer, Character targetPlay
         #region transactions
         // Make the actual sales
         var entriesSold = 0;
+        void RestoreStock(IcsSku sku, IcsItem shopItem)
+        {
+            if (shopItem.Remaining >= 0)
+            {
+                shopItem.Remaining += (int)sku.ItemCount;
+                CashShopManager.Instance.UpdateRemainingShopItemStock(shopItem.ShopId, shopItem.Remaining);
+            }
+        }
+
         foreach (var sku in shoppingCart)
         {
             if (!CashShopManager.Instance.ShopItems.TryGetValue(sku.ShopId, out var shopItem))
@@ -203,6 +237,14 @@ public class CashShopBuyTask(byte buyMode, Character buyer, Character targetPlay
                 }
             }
 
+            var effectivePrice = sku.DiscountPrice > 0 ? sku.DiscountPrice : sku.Price;
+            if (effectivePrice > int.MaxValue)
+            {
+                Logger.Error($"Sale currency debit failed for {buyer.Name}, {sku.Currency} x {effectivePrice}: price exceeds supported debit range");
+                buyer.SendErrorMessage(ErrorMessageType.IngameShopBuyFail);
+                continue;
+            }
+
             // Reduce remaining stock if needed
             if (shopItem.Remaining >= 0)
             {
@@ -224,27 +266,42 @@ public class CashShopBuyTask(byte buyMode, Character buyer, Character targetPlay
             switch (sku.Currency)
             {
                 case CashShopCurrencyType.Credits:
-                    if (!AccountManager.Instance.RemoveCredits(buyer.AccountId, (int)(sku.DiscountPrice > 0 ? sku.DiscountPrice : sku.Price)))
-                        Logger.Error($"Sale validation failed for {buyer.Name}, {sku.Currency} x {sku.Price}");
+                    if (AccountManager.Instance.GetAccountDetails(buyer.AccountId).Credits < effectivePrice ||
+                        !AccountManager.Instance.RemoveCredits(buyer.AccountId, (int)effectivePrice))
+                    {
+                        Logger.Error($"Sale currency debit failed for {buyer.Name}, {sku.Currency} x {effectivePrice}");
+                        RestoreStock(sku, shopItem);
+                        continue;
+                    }
                     break;
                 case CashShopCurrencyType.AaPoints:
                     //if (buyer.AaPoint < sku.Price)
                     //    Logger.Error($"Sale validation failed for {buyer.Name}, {sku.Currency} x {sku.Price}");
                     //buyer.AaPoint -= sku.Price;
                     Logger.Warn($"Sale currency not implemented {sku.Currency} for {buyer.Name}");
-                    break;
+                    RestoreStock(sku, shopItem);
+                    continue;
                 case CashShopCurrencyType.Loyalty:
-                    if (beforeBuyAccountDetails.Loyalty < sku.Price)
-                        Logger.Error($"Sale validation failed for {buyer.Name}, {sku.Currency} x {sku.Price}");
-                    AccountManager.Instance.AddLoyalty(buyer.AccountId, (int)(sku.Price * -1));
+                    if (AccountManager.Instance.GetAccountDetails(buyer.AccountId).Loyalty < effectivePrice ||
+                        !AccountManager.Instance.AddLoyalty(buyer.AccountId, -(int)effectivePrice))
+                    {
+                        Logger.Error($"Sale currency debit failed for {buyer.Name}, {sku.Currency} x {effectivePrice}");
+                        RestoreStock(sku, shopItem);
+                        continue;
+                    }
                     break;
                 case CashShopCurrencyType.Coins:
-                    if (!buyer.TrySpendMoney(SlotType.Inventory, sku.Price, ItemTaskType.StoreBuy))
-                        Logger.Error($"Sale validation failed for {buyer.Name}, {sku.Currency} x {sku.Price}");
+                    if (!buyer.TrySpendMoney(SlotType.Inventory, effectivePrice, ItemTaskType.StoreBuy))
+                    {
+                        Logger.Error($"Sale currency debit failed for {buyer.Name}, {sku.Currency} x {effectivePrice}");
+                        RestoreStock(sku, shopItem);
+                        continue;
+                    }
                     break;
                 default:
                     Logger.Error($"Invalid Currency {sku.Currency}");
-                    break;
+                    RestoreStock(sku, shopItem);
+                    continue;
             }
 
             var items = new List<Game.Items.Item>();
@@ -273,7 +330,7 @@ public class CashShopBuyTask(byte buyMode, Character buyer, Character targetPlay
 
             Logger.Info($"ICSBuyGood {buyer.Name} -> {targetPlayer.Name} - {useName} x {sku.ItemCount}, SKU:{sku.Sku}");
             if (!CashShopManager.Instance.LogSale(buyer.AccountId, buyer.Id, targetPlayer.AccountId,
-                    targetPlayer.Id, DateTime.UtcNow, shopItem.ShopId, sku.Sku, sku.DiscountPrice > 0 ? sku.DiscountPrice : sku.Price, sku.Currency, string.Empty))
+                    targetPlayer.Id, DateTime.UtcNow, shopItem.ShopId, sku.Sku, effectivePrice, sku.Currency, string.Empty))
                 Logger.Error(
                     $"ICSBuyGood {buyer.Name} -> {targetPlayer.Name} - {useName} x {sku.ItemCount}, SKU:{sku.Sku}, save failed!");
         }

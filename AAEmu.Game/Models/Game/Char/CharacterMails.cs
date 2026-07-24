@@ -51,6 +51,9 @@ public class CharacterMails
     {
         if (MailManager.Instance._allPlayerMails.TryGetValue(id, out var mail))
         {
+            if ((isSent && mail.Header.SenderId != Self.Id) || (!isSent && mail.Header.ReceiverId != Self.Id))
+                return;
+
             if (mail.Header.Status == MailStatus.Unread && !isSent)
             {
                 UnreadMailCount.UpdateReceived(mail.MailType, -1);
@@ -138,6 +141,9 @@ public class CharacterMails
         var res = true;
         if (MailManager.Instance._allPlayerMails.TryGetValue(mailId, out var thisMail))
         {
+            if (thisMail.Header.ReceiverId != Self.Id)
+                return false;
+
             var tookMoney = false;
             if (thisMail.MailType == MailType.AucOffSuccess && thisMail.Body.CopperCoins > 0 && takeMoney)
             {
@@ -304,13 +310,23 @@ public class CharacterMails
     {
         if (MailManager.Instance._allPlayerMails.TryGetValue(id, out var thisMail))
         {
+            if (thisMail.Header.ReceiverId != Self.Id)
+                return;
+
             var itemSlots = new List<(SlotType slotType, byte slot)>();
-            for (var i = 0; i < MailBody.MaxMailAttachments; i++)
+            for (var i = 0; i < thisMail.Header.Attachments; i++)
             {
-                var item = ItemManager.Instance.GetItemByItemId(thisMail.Body.Attachments[i].Id);
-                itemSlots.Add(item.SlotType == SlotType.None
-                    ? ((SlotType slotType, byte slot))(0, 0)
-                    : (item.SlotType, (byte)item.Slot));
+                if (i < thisMail.Body.Attachments.Count)
+                {
+                    var item = ItemManager.Instance.GetItemByItemId(thisMail.Body.Attachments[i].Id);
+                    itemSlots.Add(item == null || item.SlotType == SlotType.None
+                        ? (SlotType.None, (byte)0)
+                        : (item.SlotType, (byte)item.Slot));
+                }
+                else
+                {
+                    itemSlots.Add((SlotType.None, 0));
+                }
             }
 
             SendMailToPlayer(thisMail.Header.Type, thisMail.Header.SenderName, thisMail.Header.Title, thisMail.Body.Text,

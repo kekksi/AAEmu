@@ -22,6 +22,7 @@ namespace AAEmu.Game.Core.Managers;
 public class AuctionManager(IItemManager itemManager, INameManager nameManager, IAuctionIdManager auctionIdManager, ILocalizationManager localizationManager, ITaskManager taskManager) : Singleton<AuctionManager>, IAuctionManager
 {
     private static Logger Logger { get; } = LogManager.GetCurrentClassLogger();
+    private readonly object _auctionLock = new();
 
     public ConcurrentDictionary<ulong, AuctionLot> AuctionLots { get; } = [];
     private ConcurrentBag<long> DeletedAuctionItemIds { get; } = [];
@@ -90,36 +91,52 @@ public class AuctionManager(IItemManager itemManager, INameManager nameManager, 
 
     public void CancelAuctionLot(Character player, ulong auctionId)
     {
-        var auctionLot = GetAuctionLotFromId(auctionId);
-        if (auctionLot == null)
+        lock (_auctionLock)
         {
-            Logger.Warn($"AuctionLot with ID {auctionId} not found.");
-            return;
-        }
+            var auctionLot = GetAuctionLotFromId(auctionId);
+            if (auctionLot == null)
+            {
+                Logger.Warn($"AuctionLot with ID {auctionId} not found.");
+                player?.SendErrorMessage(ErrorMessageType.Invalid);
+                return;
+            }
 
-        if (auctionLot.BidderName != "") // Someone has already bid on the item, and we do not want to remove it
-        {
-            Logger.Warn($"AuctionLot with ID {auctionId} has already been bid on.");
-            return;
-        }
+            if (player == null || auctionLot.ClientId != player.Id)
+            {
+                player?.SendErrorMessage(ErrorMessageType.AuctionInvalidArticleForCancel);
+                return;
+            }
 
-        var newItem = itemManager.Create(auctionLot.Item.TemplateId, auctionLot.Item.Count, auctionLot.Item.Grade);
-        if (newItem != null)
-        {
-            // itemList[0] = newItem;
+            if (auctionLot.BidderName != "") // Someone has already bid on the item, and we do not want to remove it
+            {
+                Logger.Warn($"AuctionLot with ID {auctionId} has already been bid on.");
+                return;
+            }
+
+            var escrowedItem = auctionLot.Item;
+            if (escrowedItem == null || escrowedItem._holdingContainer != player.Inventory.AuctionAttachments)
+            {
+                Logger.Warn($"AuctionLot with ID {auctionId} does not reference an escrowed item owned by {player.Name}.");
+                player.SendErrorMessage(ErrorMessageType.AuctionInvalidArticleForCancel);
+                return;
+            }
 
             // TODO: Read this from saved data
             var recalculatedFee = auctionLot.DirectMoney * .01 * ((int)auctionLot.Duration + 1);
             if (recalculatedFee > MaxListingFee) recalculatedFee = MaxListingFee;
 
-            var cancelMail = new MailForAuction(newItem, auctionLot.ClientId, auctionLot.DirectMoney,
+            var cancelMail = new MailForAuction(escrowedItem, auctionLot.ClientId, auctionLot.DirectMoney,
                 (int)recalculatedFee);
-            cancelMail.FinalizeForCancel();
+            if (!cancelMail.FinalizeForCancel())
+            {
+                Logger.Warn($"CancelAuctionLot: failed to finalize cancel mail for auction {auctionLot.Id}");
+                return;
+            }
             cancelMail.Send();
-        }
 
-        RemoveAuctionLot(auctionLot);
-        player.SendPacket(new SCAuctionCanceledPacket(auctionLot));
+            RemoveAuctionLot(auctionLot);
+            player.SendPacket(new SCAuctionCanceledPacket(auctionLot));
+        }
     }
 
     private AuctionLot GetAuctionLotFromId(ulong auctionId)
@@ -129,63 +146,93 @@ public class AuctionManager(IItemManager itemManager, INameManager nameManager, 
 
     public void BidOnAuctionLot(Character player, uint auctioneerId, uint auctioneerId2, AuctionLot lot, AuctionBid bid)
     {
-        if (player == null || lot == null || bid == null)
+        lock (_auctionLock)
         {
-            Logger.Warn("Invalid arguments passed to BidOnAuctionLot.");
-            return;
-        }
-
-        var auctionLot = GetAuctionLotFromId(lot.Id);
-        if (auctionLot == null)
-        {
-            Logger.Warn("Invalid auctionItem passed to BidOnAuctionLot.");
-            Logger.Warn($"AuctionLot with ID {lot.Id} not found in the list.");
-            return;
-        }
-
-        if (bid.Money >= auctionLot.DirectMoney && auctionLot.DirectMoney != 0) // Buy now
-        {
-            if (!player.TrySpendMoney(SlotType.Inventory, auctionLot.DirectMoney))
-                return;
-
-            if (auctionLot.BidderId != 0) // send mail to person who bid if item was bought at full price.
+            if (player == null || lot == null || bid == null)
             {
-                var newMail = new MailForAuction(auctionLot.Item.TemplateId, auctionLot.ClientId, auctionLot.DirectMoney, 0);
-                newMail.FinalizeForBidFail(auctionLot.BidderId, auctionLot.BidMoney);
-                newMail.Send();
-            }
-            RemoveAuctionLotSold(auctionLot, player.Name, auctionLot.DirectMoney);
-        }
-        else if (bid.Money > auctionLot.BidMoney) // Bid
-        {
-            if (!player.TrySpendMoney(SlotType.Inventory, bid.Money, ItemTaskType.Auction))
+                Logger.Warn("Invalid arguments passed to BidOnAuctionLot.");
                 return;
-
-            if (auctionLot.BidderName != "" && auctionLot.BidderId != 0) // Send mail to old bidder.
-            {
-                // TODO: Read this from saved data
-                var recalculatedFee = auctionLot.DirectMoney * .01 * ((int)auctionLot.Duration + 1);
-                if (recalculatedFee > MaxListingFee) recalculatedFee = MaxListingFee;
-
-                var cancelMail = new MailForAuction(auctionLot.Item.TemplateId, auctionLot.ClientId, auctionLot.DirectMoney, (int)recalculatedFee);
-                cancelMail.FinalizeForBidFail(auctionLot.BidderId, auctionLot.BidMoney);
-                cancelMail.Send();
             }
 
-            // Set info to new bidders info
-            auctionLot.BidderName = player.Name;
-            auctionLot.BidderId = player.Id;
-            auctionLot.BidWorldId = (byte)player.Transform.WorldId;
-            auctionLot.BidMoney = bid.Money;
+            var auctionLot = GetAuctionLotFromId(lot.Id);
+            if (auctionLot == null)
+            {
+                Logger.Warn("Invalid auctionItem passed to BidOnAuctionLot.");
+                Logger.Warn($"AuctionLot with ID {lot.Id} not found in the list.");
+                player.SendErrorMessage(ErrorMessageType.Invalid);
+                return;
+            }
 
-            bid.BidderName = player.Name;
-            bid.BidderId = player.Id;
-            bid.WorldId = (byte)player.Transform.WorldId;
-            player.SendPacket(new SCAuctionBidPacket(bid, false, auctionLot.Item.TemplateId));
-            auctionLot.IsDirty = true;
+            if (auctionLot.ClientId == player.Id)
+            {
+                player.SendErrorMessage(ErrorMessageType.InvalidArticleForBidding);
+                return;
+            }
 
-            // Updating Data in the AuctionLots List
-            UpdateAuctionLotInList(auctionLot);
+            if (auctionLot.Item == null ||
+                auctionLot.Item._holdingContainer == null ||
+                auctionLot.Item._holdingContainer.OwnerId != auctionLot.ClientId ||
+                auctionLot.Item.SlotType != SlotType.Auction)
+            {
+                Logger.Warn($"AuctionLot with ID {lot.Id} has no escrowed item.");
+                player.SendErrorMessage(ErrorMessageType.Invalid);
+                return;
+            }
+
+            if (bid.Money >= auctionLot.DirectMoney && auctionLot.DirectMoney != 0) // Buy now
+            {
+                if (!player.TrySpendMoney(SlotType.Inventory, auctionLot.DirectMoney, ItemTaskType.Auction))
+                    return;
+
+                if (auctionLot.BidderId != 0) // send mail to person who bid if item was bought at full price.
+                {
+                    var newMail = new MailForAuction(auctionLot.Item.TemplateId, auctionLot.ClientId, auctionLot.DirectMoney, 0);
+                    newMail.FinalizeForBidFail(auctionLot.BidderId, auctionLot.BidMoney);
+                    newMail.Send();
+                }
+                RemoveAuctionLotSold(auctionLot, player.Name, auctionLot.DirectMoney);
+            }
+            else if (bid.Money > auctionLot.BidMoney) // Bid
+            {
+                if (auctionLot.BidMoney == 0 && bid.Money < auctionLot.StartMoney)
+                {
+                    player.SendErrorMessage(ErrorMessageType.AuctionInvalidBidPrice);
+                    return;
+                }
+
+                if (!player.TrySpendMoney(SlotType.Inventory, bid.Money, ItemTaskType.Auction))
+                    return;
+
+                if (auctionLot.BidderName != "" && auctionLot.BidderId != 0) // Send mail to old bidder.
+                {
+                    // TODO: Read this from saved data
+                    var recalculatedFee = auctionLot.DirectMoney * .01 * ((int)auctionLot.Duration + 1);
+                    if (recalculatedFee > MaxListingFee) recalculatedFee = MaxListingFee;
+
+                    var cancelMail = new MailForAuction(auctionLot.Item.TemplateId, auctionLot.ClientId, auctionLot.DirectMoney, (int)recalculatedFee);
+                    cancelMail.FinalizeForBidFail(auctionLot.BidderId, auctionLot.BidMoney);
+                    cancelMail.Send();
+                }
+
+                // Set info to new bidders info
+                auctionLot.BidderName = player.Name;
+                auctionLot.BidderId = player.Id;
+                auctionLot.BidWorldId = (byte)player.Transform.WorldId;
+                auctionLot.BidMoney = bid.Money;
+
+                bid.BidderName = player.Name;
+                bid.BidderId = player.Id;
+                bid.WorldId = (byte)player.Transform.WorldId;
+                player.SendPacket(new SCAuctionBidPacket(bid, false, auctionLot.Item.TemplateId));
+                auctionLot.IsDirty = true;
+
+                // Updating Data in the AuctionLots List
+                UpdateAuctionLotInList(auctionLot);
+            }
+            else
+            {
+                player.SendErrorMessage(ErrorMessageType.AuctionInvalidBidPrice);
+            }
         }
     }
 
@@ -286,14 +333,17 @@ public class AuctionManager(IItemManager itemManager, INameManager nameManager, 
     public void UpdateAuctionHouse()
     {
         Logger.Trace("Updating Auction House!");
-        var itemsToRemove = AuctionLots.Values.Where(c => DateTime.UtcNow > c.EndTime).ToList();
-
-        foreach (var item in itemsToRemove)
+        lock (_auctionLock)
         {
-            if (item.BidderId != 0)
-                RemoveAuctionLotSold(item, item.BidderName, item.BidMoney);
-            else
-                RemoveAuctionLotFail(item);
+            var itemsToRemove = AuctionLots.Values.Where(c => DateTime.UtcNow > c.EndTime).ToList();
+
+            foreach (var item in itemsToRemove)
+            {
+                if (item.BidderId != 0)
+                    RemoveAuctionLotSold(item, item.BidderName, item.BidMoney);
+                else
+                    RemoveAuctionLotFail(item);
+            }
         }
     }
 
@@ -606,9 +656,13 @@ public class AuctionManager(IItemManager itemManager, INameManager nameManager, 
 
     public void PostLotOnAuction(Character player, uint npcId, uint npcId2, ulong itemId, int startPrice, int buyoutPrice, AuctionDuration duration)
     {
-        var item = itemManager.GetItemByItemId(itemId);
-        if (item == null)
+        if (player == null)
+            return;
+
+        var item = player.Inventory.GetItemById(itemId);
+        if (item == null || item.SlotType != SlotType.Inventory)
         {
+            player.SendErrorMessage(ErrorMessageType.AucInvalidItemOrNotInYourBag);
             return;
         }
 
@@ -632,7 +686,13 @@ public class AuctionManager(IItemManager itemManager, INameManager nameManager, 
             return;
         }
 
-        player.Inventory.AuctionAttachments.AddOrMoveExistingItem(ItemTaskType.Auction, item);
+        if (!player.Inventory.AuctionAttachments.AddOrMoveExistingItem(ItemTaskType.Auction, item))
+        {
+            if (auctionFee > 0)
+                player.TryAddMoney(SlotType.Inventory, (int)auctionFee, ItemTaskType.Auction);
+            player.SendErrorMessage(ErrorMessageType.AucInvalidItemOrNotInYourBag);
+            return;
+        }
 
         AddAuctionLot(lot);
         player.SendPacket(new SCAuctionPostedPacket(lot));
