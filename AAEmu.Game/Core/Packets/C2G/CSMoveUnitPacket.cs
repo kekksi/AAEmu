@@ -3,6 +3,7 @@ using AAEmu.Game.Core.Managers.World;
 using AAEmu.Game.Core.Network.Game;
 using AAEmu.Game.Core.Packets.G2C;
 using AAEmu.Game.Models.Game.Char;
+using AAEmu.Game.Models.Game.DoodadObj.Static;
 using AAEmu.Game.Models.Game.Skills.Buffs;
 using AAEmu.Game.Models.Game.Units;
 using AAEmu.Game.Models.Game.Units.Movements;
@@ -68,6 +69,9 @@ public class CSMoveUnitPacket() : GamePacket(CSOffsets.CSMoveUnitPacket, 1)
             Logger.Warn($"Invalid target {_objId} from {character.Name}");
             return;
         }
+
+        if (!CanControlMovement(character, targetUnit))
+            return;
 
         // We are not controlling our main character
         switch (_moveType)
@@ -275,6 +279,27 @@ public class CSMoveUnitPacket() : GamePacket(CSOffsets.CSMoveUnitPacket, 1)
     {
         if (moveType.VelX != 0 || moveType.VelY != 0 || moveType.VelZ != 0)
             unit.Buffs.TriggerRemoveOn(BuffRemoveOn.Move);
+    }
+
+    private static bool CanControlMovement(Character character, BaseUnit targetUnit)
+    {
+        if (targetUnit.ObjId == character.ObjId)
+            return true;
+
+        if (targetUnit is Mate mate)
+            return mate.OwnerObjId == character.ObjId ||
+                   mate.OwnerId == character.Id;
+
+        if (targetUnit is Slave slave)
+        {
+            slave.AttachedCharacters.TryGetValue(AttachPointKind.Driver, out var driver);
+            return slave.OwnerObjId == character.ObjId ||
+                   slave.OwnerId == character.Id ||
+                   slave.Summoner?.Id == character.Id ||
+                   driver == character;
+        }
+
+        return false;
     }
 
     public override string Verbose()

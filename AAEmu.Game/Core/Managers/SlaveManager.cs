@@ -226,6 +226,14 @@ public class SlaveManager(WorldInstance parentWorldInstance)
     {
         var slaveInfo = GetSlaveByObjId(objId);
         if (slaveInfo == null) return;
+
+        // Only the owner/summoner may despawn a player-owned slave.
+        if (owner != null &&
+            slaveInfo.OwnerObjId != owner.ObjId &&
+            slaveInfo.OwnerId != owner.Id &&
+            slaveInfo.Summoner?.Id != owner.Id)
+            return;
+
         slaveInfo.Save();
         // Remove passengers
         foreach (var character in slaveInfo.AttachedCharacters.Values.ToList())

@@ -486,9 +486,22 @@ public class HousingManager(
             return;
         }
 
+        var itemDesignId = GetDesignByItemId(sourceDesignItem.TemplateId);
+        if (itemDesignId == 0 || itemDesignId != designId)
+        {
+            connection.ActiveChar.SendErrorMessage(ErrorMessageType.InvalidHouseInfo);
+            return;
+        }
+
         // var zoneId = worldManager.GetZoneId(connection.ActiveChar.Transform.WorldId, posX, posY);
 
         var houseTemplate = HousingGameData.Instance.GetTemplate(designId);
+        if (houseTemplate == null)
+        {
+            connection.ActiveChar.SendErrorMessage(ErrorMessageType.InvalidHouseInfo);
+            return;
+        }
+
         CalculateBuildingTaxInfo(connection.ActiveChar.AccountId, houseTemplate, true, out var totalTaxAmountDue, out _, out _, out _, out _);
 
         if (FeaturesManager.Fsets.Check(Models.Game.Features.Feature.taxItem))
@@ -1128,7 +1141,6 @@ public class HousingManager(
         }
     }
 
-    /* Unused
     /// <summary>
     /// Get house design by item template
     /// </summary>
@@ -1136,10 +1148,8 @@ public class HousingManager(
     /// <returns></returns>
     private uint GetDesignByItemId(uint itemId)
     {
-        var design = _housingItemHousings.FirstOrDefault(h => h.Item_Id == itemId);
-        return design?.Design_Id ?? 0;
+        return HousingGameData.Instance.GetDesignByItemId(itemId);
     }
-    */
 
     /// <summary>
     /// Helper function to calculate how many Appraisal Certificates are needed to sell a house at a given price

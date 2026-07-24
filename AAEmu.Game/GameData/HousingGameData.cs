@@ -317,6 +317,12 @@ public class HousingGameData : Singleton<HousingGameData>, IGameDataLoader
         return 0;
     }
 
+    public uint GetDesignByItemId(uint itemId)
+    {
+        var design = _housingItemHousings.FirstOrDefault(h => h.Item_Id == itemId);
+        return design?.Design_Id ?? 0;
+    }
+
     /// <summary>
     /// Get decoration design by Id
     /// </summary>
