@@ -213,6 +213,13 @@ public class TeamManager(IWorldManager worldManager, IChatManager chatManager, I
                 return;
             }
 
+            if (GetActiveTeamByUnit(target.Id) != null)
+            {
+                // TODO - ERROR MESSAGE ALREADY HAVE TEAM
+                _activeInvitations.Remove(activeInvitation.Target.Id);
+                return;
+            }
+
             var (newTeamMember, party) = activeTeam.AddMember(target);
             if (newTeamMember != null)
             {

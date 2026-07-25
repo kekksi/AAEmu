@@ -1,5 +1,6 @@
 ﻿using AAEmu.Game.Core.Managers;
 using AAEmu.Game.Models.Game.Skills.Buffs.Triggers;
+using AAEmu.Game.Models.Game.Units;
 using NLog;
 
 namespace AAEmu.Game.Models.Game.Skills.Buffs;
@@ -12,6 +13,7 @@ public class BuffTriggersHandler(Buff buff)
     public void SubscribeEvents()
     {
         var buffId = buff.Template.BuffId;
+        var owner = buff.Owner as Unit;
 
         var triggerTemplates = SkillManager.Instance.GetBuffTriggerTemplates(buffId);
 
@@ -34,7 +36,8 @@ public class BuffTriggersHandler(Buff buff)
                     break;
                 case Buffs.BuffEventTriggerKind.Damaged:
                     trigger = new DamagedBuffTrigger(buff, triggerTemplate);
-                    buff.Caster.Events.OnDamaged += trigger.Execute;
+                    if (owner != null)
+                        owner.Events.OnDamaged += trigger.Execute;
                     _triggers.Add(trigger);
                     break;
                 case Buffs.BuffEventTriggerKind.Dispelled:
@@ -49,22 +52,26 @@ public class BuffTriggersHandler(Buff buff)
                     break;
                 case Buffs.BuffEventTriggerKind.DamagedMelee:
                     trigger = new DamagedBuffTrigger(buff, triggerTemplate);
-                    buff.Caster.Events.OnDamagedMelee += trigger.Execute;
+                    if (owner != null)
+                        owner.Events.OnDamagedMelee += trigger.Execute;
                     _triggers.Add(trigger);
                     break;
                 case Buffs.BuffEventTriggerKind.DamagedRanged:
                     trigger = new DamagedBuffTrigger(buff, triggerTemplate);
-                    buff.Caster.Events.OnDamagedRanged += trigger.Execute;
+                    if (owner != null)
+                        owner.Events.OnDamagedRanged += trigger.Execute;
                     _triggers.Add(trigger);
                     break;
                 case Buffs.BuffEventTriggerKind.DamagedSpell:
                     trigger = new DamagedBuffTrigger(buff, triggerTemplate);
-                    buff.Caster.Events.OnDamagedSpell += trigger.Execute;
+                    if (owner != null)
+                        owner.Events.OnDamagedSpell += trigger.Execute;
                     _triggers.Add(trigger);
                     break;
                 case Buffs.BuffEventTriggerKind.DamagedSiege:
                     trigger = new DamagedBuffTrigger(buff, triggerTemplate);
-                    buff.Caster.Events.OnDamagedSiege += trigger.Execute;
+                    if (owner != null)
+                        owner.Events.OnDamagedSiege += trigger.Execute;
                     _triggers.Add(trigger);
                     break;
                 case Buffs.BuffEventTriggerKind.Landing:
@@ -112,6 +119,8 @@ public class BuffTriggersHandler(Buff buff)
     }
     public void UnsubscribeEvents()
     {
+        var owner = buff.Owner as Unit;
+
         //TODO These invokes need to be moved to better locations
         //TODO: Make sure this is when buff time runs out?
         //Not sure if this is for expiration or for being dispelled aka Purged
@@ -129,7 +138,8 @@ public class BuffTriggersHandler(Buff buff)
                     buff.Caster.Events.OnDamage -= trigger.Execute;
                     break;
                 case Buffs.BuffEventTriggerKind.Damaged:
-                    buff.Caster.Events.OnDamaged -= trigger.Execute;
+                    if (owner != null)
+                        owner.Events.OnDamaged -= trigger.Execute;
                     break;
                 case Buffs.BuffEventTriggerKind.Dispelled:
                     buff.Events.OnDispelled -= trigger.Execute;
@@ -138,16 +148,20 @@ public class BuffTriggersHandler(Buff buff)
                     buff.Events.OnTimeout -= trigger.Execute;
                     break;
                 case Buffs.BuffEventTriggerKind.DamagedMelee:
-                    buff.Caster.Events.OnDamagedMelee -= trigger.Execute;
+                    if (owner != null)
+                        owner.Events.OnDamagedMelee -= trigger.Execute;
                     break;
                 case Buffs.BuffEventTriggerKind.DamagedRanged:
-                    buff.Caster.Events.OnDamagedRanged -= trigger.Execute;
+                    if (owner != null)
+                        owner.Events.OnDamagedRanged -= trigger.Execute;
                     break;
                 case Buffs.BuffEventTriggerKind.DamagedSpell:
-                    buff.Caster.Events.OnDamagedSpell -= trigger.Execute;
+                    if (owner != null)
+                        owner.Events.OnDamagedSpell -= trigger.Execute;
                     break;
                 case Buffs.BuffEventTriggerKind.DamagedSiege:
-                    buff.Caster.Events.OnDamagedSiege -= trigger.Execute;
+                    if (owner != null)
+                        owner.Events.OnDamagedSiege -= trigger.Execute;
                     break;
                 case Buffs.BuffEventTriggerKind.Landing:
                     break;

@@ -23,7 +23,7 @@ public class QuestActObjCraft(QuestComponentTemplate parentComponent) : QuestAct
     {
         Logger.Debug($"{QuestActTemplateName}({DetailId}).RunAct: Quest: {quest.TemplateId}, Owner {quest.Owner.Name} ({quest.Owner.Id}), CraftId {CraftId}, Count {Count}");
         return ParentQuestTemplate.Score > 0
-            ? currentObjectiveCount * Count > ParentQuestTemplate.Score
+            ? currentObjectiveCount * Count >= ParentQuestTemplate.Score
             : currentObjectiveCount >= Count;
     }
 

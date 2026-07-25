@@ -21,7 +21,7 @@ public class QuestActObjZoneMonsterHunt(QuestComponentTemplate parentComponent) 
     public override bool RunAct(Quest quest, QuestAct questAct, int currentObjectiveCount)
     {
         Logger.Debug($"{QuestActTemplateName}({DetailId}).RunAct: Quest: {quest.TemplateId}, Owner {quest.Owner.Name} ({quest.Owner.Id}), Zone {ZoneId}");
-        return quest.Template.Score > 0 ? currentObjectiveCount * Count >= quest.Template.Score : currentObjectiveCount > Count;
+        return quest.Template.Score > 0 ? currentObjectiveCount * Count >= quest.Template.Score : currentObjectiveCount >= Count;
     }
 
     public override void InitializeAction(Quest quest, QuestAct questAct)

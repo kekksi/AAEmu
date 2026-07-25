@@ -29,7 +29,7 @@ public class QuestActSupplyRemoveItem(QuestComponentTemplate parentComponent) : 
             if (removed < Count)
                 Logger.Debug($"{QuestActTemplateName}({DetailId}).RunAct: Did not have enough items to remove Quest: {quest.TemplateId}, Owner {quest.Owner.Name} ({quest.Owner.Id}), ItemId {ItemId}, Count {removed}/{toRemove}(of {Count}) (found {unitsCount})");
 
-            return true;
+            return removed >= Count;
         }
 
         return false;

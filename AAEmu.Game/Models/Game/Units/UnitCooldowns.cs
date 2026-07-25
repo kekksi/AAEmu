@@ -12,8 +12,8 @@ public class UnitCooldowns
 
     public void AddCooldown(uint skillId, uint duration)
     {
-        if (!Cooldowns.TryGetValue(skillId, out _))
-            Cooldowns.TryAdd(skillId, DateTime.UtcNow + TimeSpan.FromMilliseconds(duration));
+        var endTime = DateTime.UtcNow + TimeSpan.FromMilliseconds(duration);
+        Cooldowns.AddOrUpdate(skillId, endTime, (_, _) => endTime);
     }
 
     public bool CheckCooldown(uint skillId)

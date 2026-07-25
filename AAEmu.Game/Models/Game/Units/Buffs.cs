@@ -443,7 +443,7 @@ public class Buffs : IBuffs
                     if (buff.Template.MaxStack > 0 && GetBuffCountById(buff.Template.BuffId) >= buff.Template.MaxStack)
                         foreach (var e in new List<Buff>(_effects))
                             if (e is { InUse: true } && e.Template.BuffId == buff.Template.BuffId)
-                                if (e.GetTimeLeft() < buff.GetTimeLeft())
+                                if (last == null || e.GetTimeLeft() < last.GetTimeLeft())
                                     last = e;
                     break;
             }

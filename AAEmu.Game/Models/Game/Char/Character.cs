@@ -1855,6 +1855,7 @@ public partial class Character : Unit, ICharacter
 
     public void ResetSkillCooldown(uint skillId, bool gcd)
     {
+        Cooldowns.RemoveCooldown(skillId);
         SendPacket(new SCSkillCooldownResetPacket(this, skillId, 0, gcd));
     }
 
