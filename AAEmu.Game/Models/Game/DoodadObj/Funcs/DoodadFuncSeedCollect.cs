@@ -9,5 +9,6 @@ public class DoodadFuncSeedCollect : DoodadFuncTemplate
     public override void Use(BaseUnit caster, Doodad owner, uint skillId, int nextPhase = 0)
     {
         Logger.Trace("DoodadFuncSeedCollect");
+        owner.ToNextPhase = true;
     }
 }

@@ -91,8 +91,6 @@ public class DoodadSpawner : Spawner<Doodad>
     public override Doodad Spawn(uint objId, ulong itemId, uint charId)
     {
         Permanent = true; // Doodad not on the schedule.
-        _spawned = [];
-        Count = 1;
         Last = new Doodad();
         var character = WorldManager.Instance.GetCharacterByObjId(charId);
         var doodad = DoodadManager.Instance.Create(character.ParentWorld, objId, UnitId, character);
@@ -136,8 +134,6 @@ public class DoodadSpawner : Spawner<Doodad>
     {
         // TODO: clean up each doodad using the same call
         Permanent = true; // Doodad not on the schedule.
-        _spawned = [];
-        Count = 1;
         Last = new Doodad();
 
         if (objId != 0) { return null; }
@@ -179,13 +175,18 @@ public class DoodadSpawner : Spawner<Doodad>
     public override void Despawn(Doodad doodad)
     {
         doodad.Delete();
+        _spawned.Remove(doodad);
+        _spawnCount = _spawned.Count;
 
         if (doodad.Respawn == DateTime.MinValue)
         {
             ObjectIdManager.Instance.ReleaseId(doodad.ObjId);
         }
 
-        Last = null;
+        if (Last == null || Last.ObjId == doodad.ObjId)
+        {
+            Last = _spawned.Count != 0 ? _spawned[^1] : null;
+        }
     }
 
     /// <summary>
@@ -194,14 +195,19 @@ public class DoodadSpawner : Spawner<Doodad>
     /// <param name="doodad"></param>
     public void DecreaseCount(Doodad doodad)
     {
-        if (RespawnTime > 0)
+        _spawned.Remove(doodad);
+        _spawnCount = _spawned.Count;
+
+        if (RespawnTime > 0 && _spawnCount + _scheduledCount < (int)Count)
         {
             doodad.Respawn = DateTime.UtcNow.AddSeconds(RespawnTime);
             doodad.ParentWorld.SpawnManager.AddRespawn(doodad);
+            _scheduledCount++;
         }
-        else
+
+        if (Last == null || Last.ObjId == doodad.ObjId)
         {
-            Last = null;
+            Last = _spawned.Count != 0 ? _spawned[^1] : null;
         }
 
         doodad.Delete();
@@ -311,6 +317,29 @@ public class DoodadSpawner : Spawner<Doodad>
     /// </summary>
     public void DoSpawn()
     {
+        if (Last == null)
+        {
+            return;
+        }
+
+        if (_spawned.Contains(Last))
+        {
+            return;
+        }
+
+        if (_spawned.Count >= (int)Count)
+        {
+            Logger.Trace($"DoSpawn: spawn limit reached for Doodad templateId={UnitId}, count={Count}");
+            Last.Delete();
+            if (Last.Respawn == DateTime.MinValue)
+            {
+                ObjectIdManager.Instance.ReleaseId(Last.ObjId);
+            }
+            Last = _spawned.Count != 0 ? _spawned[^1] : null;
+            _spawnCount = _spawned.Count;
+            return;
+        }
+
         #region Schedule
         // спавнер присутствует в расписании `game_schedule_doodads`
         // First, let's check if the schedule has such an spawnerId

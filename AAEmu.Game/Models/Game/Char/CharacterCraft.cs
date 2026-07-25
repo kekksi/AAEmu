@@ -456,7 +456,13 @@ public class CharacterCraft(Character owner)
             // Check if we're crafting a trade pack, if so, try to remove currently equipped backpack slot
             if (ItemManager.Instance.IsAutoEquipTradePack(product.ItemId) == false)
             {
-                Owner.Inventory.Bag.AcquireDefaultItem(ItemTaskType.CraftActSaved, product.ItemId, product.Amount, gradeToUse, Owner.Id);
+                if (!Owner.Inventory.Bag.AcquireDefaultItem(ItemTaskType.CraftActSaved, product.ItemId, product.Amount, gradeToUse, Owner.Id))
+                {
+                    Logger.Error($"Failed to create craft product for character {Owner.Name}, item {product.ItemId}");
+                    Owner.SendErrorMessage(ErrorMessageType.CraftCantActAnyMore, ErrorMessageType.NotEnoughSpace, 0, false);
+                    CancelCraft();
+                    return;
+                }
             }
             else
             {

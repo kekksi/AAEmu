@@ -79,6 +79,12 @@ public class GradeEnchant : SpecialEffectAction
         }
         var initialGrade = item.Grade;
         var gradeTemplate = ItemManager.Instance.GetGradeTemplate(item.Grade);
+        if (item.Template?.Gradable != true)
+        {
+            Reject(character, skill, ErrorMessageType.InternalError, $"item {item.Id} is not gradable");
+            return;
+        }
+
         if (gradeTemplate == null)
         {
             Reject(character, skill, ErrorMessageType.InternalError, $"item {item.Id} has unknown grade {item.Grade}");
