@@ -24,6 +24,11 @@ public class Charge : SpecialEffectAction
         {
             var buff = target.Buffs.GetEffectFromBuffId((uint)buffId);
             var template = SkillManager.Instance.GetBuffTemplate((uint)buffId);
+            if (template == null)
+            {
+                Logger.Warn("Special effects: Charge buffId {0} has no BuffTemplate", buffId);
+                return;
+            }
 
             // Some skills (e.g. Concussive Arrow) use a fixed charge amount and
             // therefore provide identical minimum and maximum values. Random.Next

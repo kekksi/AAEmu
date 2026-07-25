@@ -370,7 +370,7 @@ public class Buffs : IBuffs
                 else
                 {
                     var nextStep = buffTolerance.GetStepAfter(toleranceCounter.CurrentStep);
-                    if (nextStep.TimeReduction <= toleranceCounter.CurrentStep.TimeReduction)
+                    if (nextStep == null)
                     {
                         // Apply immune buff
                         finalToleranceBuffId = toleranceCounter.Tolerance.FinalStepBuffId;
@@ -512,14 +512,14 @@ public class Buffs : IBuffs
         if (own == null)
             return;
 
-        if (buff == null || _effects?.Contains(buff) != true)
-            return;
-
-        if (_effects == null)
+        if (buff == null || _effects == null)
             return;
 
         lock (_lock)
         {
+            if (!_effects.Contains(buff))
+                return;
+
             buff.SetInUse(false, false);
             _effects.Remove(buff);
             own.SkillModifiersCache.RemoveModifiers(buff.Template.BuffId);

@@ -152,6 +152,12 @@ public class Skill
                     }
                 }
 
+                if (character?.IgnoreSkillCooldowns != true && unit.Cooldowns.CheckCooldown(Template.Id))
+                {
+                    Logger.Trace($"Skill: CooldownTime [{Template.CooldownTime}]!");
+                    return SkillResult.CooldownTime;
+                }
+
                 unit.SkillLastUsed = DateTime.UtcNow;
             }
         }

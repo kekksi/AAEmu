@@ -15,12 +15,14 @@ public class BuffTolerance
 
     public BuffToleranceStep GetFirstStep()
     {
-        return Steps.First();
+        return Steps.OrderBy(st => st.Id).First();
     }
 
     public BuffToleranceStep GetStepAfter(BuffToleranceStep step)
     {
-        // TODO: Handle no more
-        return Steps.First(st => st.Id > step.Id);
+        return Steps
+            .Where(st => st.Id > step.Id)
+            .OrderBy(st => st.Id)
+            .FirstOrDefault();
     }
 }

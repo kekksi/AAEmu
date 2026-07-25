@@ -23,6 +23,7 @@ public class Buff
 
     private readonly object _lock = new();
     private int _count;
+    private int _stopEffectTaskCommitted;
 
     public uint Index { get; set; }
     public Skill Skill { get; set; }
@@ -218,22 +219,28 @@ public class Buff
 
     private void StopEffectTask(bool replace)
     {
-        lock (_lock)
-        {
-            Events.OnTimeout(this, new OnTimeoutArgs());
-            Triggers.UnsubscribeEvents();
-            Owner.Buffs.RemoveEffect(this);
-            Template.Dispel(Caster, Owner, this, replace);
+        if (Interlocked.Exchange(ref _stopEffectTaskCommitted, 1) != 0)
+            return;
 
-            if (Template.FactionId > 0 && Owner is NPChar.Npc npc)
+        Events.OnTimeout(this, new OnTimeoutArgs());
+        Triggers.UnsubscribeEvents();
+        Owner.Buffs.RemoveEffect(this);
+        Template.Dispel(Caster, Owner, this, replace);
+
+        if (Template.FactionId > 0 && Owner is NPChar.Npc npc)
+        {
+            npc.SetFaction(npc.Template.FactionId);
+        }
+        else if (Template.FactionId > 0 && Owner is Unit owner)
+        {
+            FactionsEnum faction;
+            lock (_lock)
             {
-                npc.SetFaction(npc.Template.FactionId);
-            }
-            else if (Template.FactionId > 0 && Owner is Unit owner)
-            {
-                owner.SetFaction(saveFactions[owner.Id]);
+                if (!saveFactions.TryGetValue(owner.Id, out faction))
+                    return;
                 saveFactions.Remove(owner.Id);
             }
+            owner.SetFaction(faction);
         }
     }
 
