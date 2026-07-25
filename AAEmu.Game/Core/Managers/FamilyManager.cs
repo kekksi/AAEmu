@@ -95,8 +95,32 @@ public class FamilyManager(IWorldManager worldManager, IChatManager chatManager,
     public void InviteToFamily(Character inviter, string invitedCharacterName, string title)
     {
         var invited = worldManager.GetCharacter(invitedCharacterName);
-        if (invited is { Family: 0 })
-            invited.SendPacket(new SCFamilyInvitationPacket(inviter.Id, inviter.Name, 1, title));
+        if (invited == null)
+        {
+            inviter.SendErrorMessage(ErrorMessageType.FamilyInviteOffline);
+            return;
+        }
+
+        if (invited.Id == inviter.Id)
+        {
+            inviter.SendErrorMessage(ErrorMessageType.FamilySelf);
+            return;
+        }
+
+        if (invited.Family != 0)
+        {
+            inviter.SendErrorMessage(ErrorMessageType.FamilyOtherFamily);
+            return;
+        }
+
+        if (inviter.Family != 0 && !_families.ContainsKey(inviter.Family))
+        {
+            inviter.Family = 0;
+            inviter.SendErrorMessage(ErrorMessageType.FamilyNotExist);
+            return;
+        }
+
+        invited.SendPacket(new SCFamilyInvitationPacket(inviter.Id, inviter.Name, 1, title));
     }
 
     /// <summary>
@@ -111,8 +135,20 @@ public class FamilyManager(IWorldManager worldManager, IChatManager chatManager,
         if (!join)
             return;
 
+        if (invitedChar.Family != 0 || _familyMembers.ContainsKey(invitedChar.Id))
+        {
+            invitedChar.SendErrorMessage(ErrorMessageType.FamilyHasFamily);
+            return;
+        }
+
         var invitor = worldManager.GetCharacterById(invitorId);
         if (invitor == null) return;
+
+        if (invitor.Id == invitedChar.Id)
+        {
+            invitedChar.SendErrorMessage(ErrorMessageType.FamilySelf);
+            return;
+        }
 
         if (invitor.Family == 0)
         {
@@ -120,7 +156,8 @@ public class FamilyManager(IWorldManager worldManager, IChatManager chatManager,
         }
         else
         {
-            var family = _families[invitor.Family];
+            if (!_families.TryGetValue(invitor.Family, out var family))
+                return;
 
             AddFamilyMember(family, invitedChar, title);
             family.SendPacket(new SCFamilyMemberAddedPacket(family, family.Members.Count - 1));

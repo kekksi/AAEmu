@@ -59,9 +59,19 @@ public partial class QuestManager
         }
         else
         {
-            // Doesn't have a NPC or Doodad to turn in at, just auto-complete it
-            // owner.Quests.CompleteQuest(questContextId, selected, true);
-            if (owner.Quests.ActiveQuests.TryGetValue(questContextId, out var quest))
+            if (!owner.Quests.ActiveQuests.TryGetValue(questContextId, out var quest))
+                return;
+
+            var minimumProgress = quest.Template.LetItDone
+                ? QuestObjectiveStatus.CanEarlyComplete
+                : QuestObjectiveStatus.QuestComplete;
+            if (quest.Step != QuestComponentKind.Ready || quest.GetQuestObjectiveStatus() < minimumProgress)
+                return;
+
+            var readyStep = quest.QuestSteps.GetValueOrDefault(QuestComponentKind.Ready);
+            var requiresReportTarget = readyStep?.Components.Values.Any(component =>
+                component.Acts.Any(act => act.Template is QuestActConReportNpc or QuestActConReportDoodad)) == true;
+            if (!requiresReportTarget)
             {
                 quest.SelectedRewardIndex = selected;
                 quest.Step = QuestComponentKind.Reward;

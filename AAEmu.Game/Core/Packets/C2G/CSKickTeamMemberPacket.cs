@@ -1,5 +1,7 @@
 ﻿using AAEmu.Commons.Network;
+using AAEmu.Game.Core.Managers;
 using AAEmu.Game.Core.Network.Game;
+using AAEmu.Game.Models.Game.Team;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
@@ -10,6 +12,6 @@ public class CSKickTeamMemberPacket() : GamePacket(CSOffsets.CSKickTeamMemberPac
         var teamId = stream.ReadUInt32();
         var memberId = stream.ReadUInt32();
 
-        Logger.Warn("KickTeamMember, TeamId: {0}, MemberId: {1}", teamId, memberId);
+        TeamManager.Instance.AskRiskyTeam(Connection.ActiveChar, teamId, memberId, RiskyAction.Kick);
     }
 }

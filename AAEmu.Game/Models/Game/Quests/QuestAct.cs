@@ -40,7 +40,9 @@ public class QuestAct(QuestComponent parentComponent, QuestActTemplate template)
     /// <returns></returns>
     public int GetObjective(Quest quest)
     {
-        return quest?.Objectives[Template.ThisComponentObjectiveIndex] ?? 0;
+        return quest != null && Template.ThisComponentObjectiveIndex < quest.Objectives.Length
+            ? quest.Objectives[Template.ThisComponentObjectiveIndex]
+            : 0;
     }
     #endregion
 

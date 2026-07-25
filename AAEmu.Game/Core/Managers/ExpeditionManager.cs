@@ -25,6 +25,7 @@ public class ExpeditionManager(IExpeditionIdManager expeditionIdManager, ITeamMa
     private Regex _nameRegex;
 
     private Dictionary<FactionsEnum, Expedition> _expeditions;
+    private readonly Dictionary<uint, ExpeditionInvitation> _activeInvitations = [];
 
     public IEnumerable<Expedition> Expeditions { get => _expeditions.Values; }
 
@@ -301,6 +302,21 @@ public class ExpeditionManager(IExpeditionIdManager expeditionIdManager, ITeamMa
         var invited = worldManager.GetCharacter(invitedName);
         if (invited == null) return;
         if (invited.Expedition != null) return;
+        // Only block if a still-fresh invitation is pending; expired ones may be overwritten
+        // (otherwise an ignored invite would soft-lock the target out of all future guild invites)
+        if (_activeInvitations.TryGetValue(invited.Id, out var pending) &&
+            pending.Time.AddSeconds(60) >= DateTime.UtcNow)
+        {
+            inviter.SendErrorMessage(ErrorMessageType.ExpeditionOtherInvitation);
+            return;
+        }
+
+        _activeInvitations[invited.Id] = new ExpeditionInvitation
+        {
+            ExpeditionId = inviter.Expedition.Id,
+            InviterId = inviter.Id,
+            Time = DateTime.UtcNow
+        };
 
         invited.SendPacket(
             new SCExpeditionInvitationPacket(inviter.Id, inviter.Name, (uint)inviter.Expedition.Id,
@@ -311,10 +327,36 @@ public class ExpeditionManager(IExpeditionIdManager expeditionIdManager, ITeamMa
     public void ReplyInvite(GameConnection connection, FactionsEnum id1, uint id2, bool reply)
     {
         var invited = connection.ActiveChar;
-        if (!reply)
+        if (!_activeInvitations.TryGetValue(invited.Id, out var invitation))
             return;
 
-        var expedition = _expeditions[id1];
+        if (!reply)
+        {
+            _activeInvitations.Remove(invited.Id);
+            return;
+        }
+
+        if (invitation.ExpeditionId != id1 ||
+            id2 != 0 && invitation.InviterId != id2 ||
+            invitation.Time.AddSeconds(60) < DateTime.UtcNow)
+        {
+            _activeInvitations.Remove(invited.Id);
+            return;
+        }
+
+        if (invited.Expedition != null)
+        {
+            _activeInvitations.Remove(invited.Id);
+            invited.SendErrorMessage(ErrorMessageType.ExpeditionAlreadyMember);
+            return;
+        }
+
+        if (!_expeditions.TryGetValue(id1, out var expedition) || expedition.GetMember(invited) != null)
+        {
+            _activeInvitations.Remove(invited.Id);
+            return;
+        }
+
         var newMember = GetMemberFromCharacter(expedition, invited, false);
 
         invited.Expedition = expedition;
@@ -326,6 +368,7 @@ public class ExpeditionManager(IExpeditionIdManager expeditionIdManager, ITeamMa
         SendExpeditionInfo(invited);
         expedition.OnCharacterLogin(invited);
         Save(expedition);
+        _activeInvitations.Remove(invited.Id);
         // invited.Save(); // Moved to SaveMananger
     }
 
@@ -557,4 +600,11 @@ public class ExpeditionManager(IExpeditionIdManager expeditionIdManager, ITeamMa
     {
         return (from guild in _expeditions.Values from member in guild.Members where member.CharacterId == characterId select guild.Id).FirstOrDefault();
     }
+}
+
+internal class ExpeditionInvitation
+{
+    public FactionsEnum ExpeditionId { get; set; }
+    public uint InviterId { get; set; }
+    public DateTime Time { get; set; }
 }

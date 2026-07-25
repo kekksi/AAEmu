@@ -365,12 +365,20 @@ public class TeamManager(IWorldManager worldManager, IChatManager chatManager, I
 
         // Check if action is allowed; Kick only by raid leader ; Leave only by self
         if (riskyAction == RiskyAction.Kick && activeTeam.OwnerId != unit.Id ||
-            riskyAction == RiskyAction.Leave && unit.Id != targetId) return;
+            riskyAction == RiskyAction.Leave && unit.Id != targetId ||
+            riskyAction == RiskyAction.Dismiss && activeTeam.OwnerId != unit.Id) return;
 
-        // Remove from ChatManager channels
-        if (!activeTeam.IsParty)
-            chatManager.GetRaidChat(activeTeam).LeaveChannel(unit);
-        chatManager.GetPartyChat(activeTeam, unit).LeaveChannel(unit);
+        if (riskyAction is RiskyAction.Leave or RiskyAction.Kick)
+        {
+            var leavingMember = activeTeam.Members.FirstOrDefault(member => member?.Character?.Id == targetId);
+            var leavingCharacter = leavingMember?.Character;
+            if (leavingCharacter != null)
+            {
+                if (!activeTeam.IsParty)
+                    chatManager.GetRaidChat(activeTeam).LeaveChannel(leavingCharacter);
+                chatManager.GetPartyChat(activeTeam, leavingCharacter).LeaveChannel(leavingCharacter);
+            }
+        }
 
         if ((riskyAction == RiskyAction.Leave || riskyAction == RiskyAction.Kick) && activeTeam.RemoveMember(targetId))
         {
@@ -605,7 +613,8 @@ public class TeamManager(IWorldManager worldManager, IChatManager chatManager, I
         var memberInfo = activeTeam?.ChangeStatus(unit);
         if (memberInfo == null) return;
         var sourceTeam = GetActiveTeamByUnit(source.Id);
-        var sourceInfo = activeTeam?.ChangeStatus(source);
+        if (sourceTeam == null) return;
+        var sourceInfo = sourceTeam.ChangeStatus(source);
         if (sourceInfo == null) return;
         if (activeTeam.Id != sourceTeam.Id)
         {

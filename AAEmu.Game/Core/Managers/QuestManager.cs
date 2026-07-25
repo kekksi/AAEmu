@@ -25,6 +25,7 @@ namespace AAEmu.Game.Core.Managers;
 public partial class QuestManager(ITaskManager taskManager, IZoneManager zoneManager) : Singleton<QuestManager>, IQuestManager
 {
     private static uint QuestCategoryTutorial => 45;
+    private const byte MaxObjectiveCount = 5;
     private static Logger Logger { get; } = LogManager.GetCurrentClassLogger();
     private bool _loaded;
     private readonly Dictionary<uint, QuestTemplate> _questTemplates = [];
@@ -213,7 +214,15 @@ public partial class QuestManager(ITaskManager taskManager, IZoneManager zoneMan
                 // Assign references to parents
                 foreach (var questAct in questActs)
                 {
-                    questAct.ThisComponentObjectiveIndex = questAct.CountsAsAnObjective ? actIndex : (byte)0xFF;
+                    if (questAct.CountsAsAnObjective && actIndex >= MaxObjectiveCount)
+                    {
+                        questAct.ThisComponentObjectiveIndex = 0xFF;
+                        Logger.Warn($"Quest {questTemplate.Id}, component {questComponentKey} has more than {MaxObjectiveCount} objectives; ignoring act {questAct.ActId}:{questAct.DetailType}({questAct.DetailId}).");
+                    }
+                    else
+                    {
+                        questAct.ThisComponentObjectiveIndex = questAct.CountsAsAnObjective ? actIndex : (byte)0xFF;
+                    }
                     questAct.ParentQuestTemplate = questTemplate;
 
                     // For selective rewards
@@ -223,7 +232,7 @@ public partial class QuestManager(ITaskManager taskManager, IZoneManager zoneMan
                         questAct.ThisSelectiveIndex = selectiveRewardIndex;
                     }
 
-                    if (questAct.CountsAsAnObjective)
+                    if (questAct.CountsAsAnObjective && actIndex < MaxObjectiveCount)
                         actIndex++;
                 }
             }

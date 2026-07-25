@@ -531,14 +531,14 @@ public class LootingContainer(IBaseUnit owner)
         // Find the highest rolled value
         var highestResult = itemEntry.PlayerRolls
             .Where(x => x.Value > 0)
-            .OrderBy(x => x.Value)
+            .OrderByDescending(x => x.Value)
             .Select(x => x.Value)
             .FirstOrDefault();
 
         // Find highest roller(s)
         var highestEntries = itemEntry.PlayerRolls
             .Where(x => x.Value >= highestResult)
-            .OrderBy(x => x.Value)
+            .OrderByDescending(x => x.Value)
             .ToList();
 
         if (highestEntries.Count <= 0)

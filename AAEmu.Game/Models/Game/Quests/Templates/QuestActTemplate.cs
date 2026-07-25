@@ -118,7 +118,7 @@ public class QuestActTemplate(QuestComponentTemplate parentComponent)
     /// <param name="value"></param>
     protected void SetObjective(Quest quest, int value)
     {
-        if (quest == null)
+        if (!HasValidObjectiveIndex(quest))
             return;
 
         // Don't go over max
@@ -144,7 +144,7 @@ public class QuestActTemplate(QuestComponentTemplate parentComponent)
     /// <returns></returns>
     public int GetObjective(Quest quest)
     {
-        return quest?.Objectives[ThisComponentObjectiveIndex] ?? 0;
+        return HasValidObjectiveIndex(quest) ? quest.Objectives[ThisComponentObjectiveIndex] : 0;
     }
     public int GetObjective(QuestAct questAct) => GetObjective(questAct.QuestComponent.Parent.Parent);
 
@@ -156,8 +156,8 @@ public class QuestActTemplate(QuestComponentTemplate parentComponent)
     /// <returns>New amount for the objective</returns>
     protected int AddObjective(Quest quest, int amount)
     {
-        if (quest == null || amount == 0)
-            return quest?.Objectives[ThisComponentObjectiveIndex] ?? 0;
+        if (!HasValidObjectiveIndex(quest) || amount == 0)
+            return 0;
 
         var maxValue = MaxObjective();
         if (maxValue > 0 && quest.Objectives[ThisComponentObjectiveIndex] + amount >= maxValue)
@@ -171,6 +171,11 @@ public class QuestActTemplate(QuestComponentTemplate parentComponent)
         quest.RequestEvaluation();
 
         return quest.Objectives[ThisComponentObjectiveIndex];
+    }
+
+    private bool HasValidObjectiveIndex(Quest quest)
+    {
+        return quest != null && ThisComponentObjectiveIndex < quest.Objectives.Length;
     }
 
     /// <summary>
