@@ -1708,7 +1708,7 @@ AlwaysHit:
         var baseCost = ((caster.GetAbLevel(Template.AbilityId) - 1) * 1.6 + 8) * 3 / 3.65;
         var cost2 = baseCost * Template.ManaLevelMd + Template.ManaCost;
         var manaCost = (int)caster.SkillModifiersCache.ApplyModifiers(this, SkillAttribute.ManaCost, cost2);
-        return manaCost;
+        return Math.Max(0, manaCost);
     }
 
     private void CommitCostsAndCooldowns(Unit unit)

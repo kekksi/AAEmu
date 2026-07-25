@@ -3,6 +3,7 @@ using AAEmu.Game.Models.Game.Char;
 using AAEmu.Game.Models.Game.DoodadObj.Templates;
 using AAEmu.Game.Models.Game.Units;
 using AAEmu.Game.Models.Tasks.Doodads;
+using AAEmu.Game.Models.Tasks.World;
 
 namespace AAEmu.Game.Models.Game.DoodadObj.Funcs;
 
@@ -23,7 +24,11 @@ public class DoodadFuncFinal : DoodadPhaseFuncTemplate
         else
             Logger.Trace("DoodadFuncFinal: After {0}, Respawn {1}, MinTime {2}, MaxTime {3}, ShowTip {4}, ShowEndTime {5}, Tip {6}", After, Respawn, MinTime, MaxTime, ShowTip, ShowEndTime, Tip);
 
-        var delay = Random.Shared.Next(MinTime, MaxTime);
+        var minTime = Math.Max(0, MinTime);
+        var maxTime = Math.Max(0, MaxTime);
+        if (maxTime < minTime)
+            maxTime = minTime;
+        var delay = minTime == maxTime ? minTime : Random.Shared.Next(minTime, maxTime);
 
         if (After > 0)
         {
@@ -51,13 +56,18 @@ public class DoodadFuncFinal : DoodadPhaseFuncTemplate
 
             // Создаем и назначаем новую задачу
             // Create and assign a new task
-            owner.FuncTask = new DoodadFuncFinalTask(caster, owner, 0, Respawn, delay);
+            owner.FuncTask = new DoodadFuncFinalTask(caster, owner, 0, false, delay);
             TaskManager.Instance.Schedule(owner.FuncTask, TimeSpan.FromMilliseconds(afterTimerDelay)); // After ms remove the object from visibility
+            if (Respawn && owner.Spawner != null)
+                TaskManager.Instance.Schedule(new DoodadSpawnerDoSpawnTask(owner.Spawner), TimeSpan.FromMilliseconds((double)afterTimerDelay + delay));
         }
         else
         {
-            owner.Delete();
-            if (!Respawn) { return false; }
+            if (!Respawn)
+            {
+                owner.Delete();
+                return false;
+            }
 
             // Отменяем текущую задачу, если она существует
             // Cancel the current task if it exists
@@ -73,10 +83,15 @@ public class DoodadFuncFinal : DoodadPhaseFuncTemplate
                 }
             }
 
-            // Создаем и назначаем новую задачу
-            // Create and assign a new task
-            owner.FuncTask = new DoodadFuncFinalTask(caster, owner, 0, Respawn, delay);
-            TaskManager.Instance.Schedule(owner.FuncTask, TimeSpan.FromMilliseconds(delay));
+            if (owner.Spawner == null)
+            {
+                owner.Delete();
+                return false;
+            }
+
+            owner.FuncTask = null;
+            owner.Spawner.Despawn(owner);
+            TaskManager.Instance.Schedule(new DoodadSpawnerDoSpawnTask(owner.Spawner), TimeSpan.FromMilliseconds(delay));
         }
 
         return true;

@@ -286,14 +286,17 @@ public class CharacterMails
 
     public void DeleteMail(long id, bool isSent)
     {
-        if (MailManager.Instance._allPlayerMails.ContainsKey(id) && !isSent)
+        if (MailManager.Instance._allPlayerMails.TryGetValue(id, out var mail) && !isSent)
         {
-            if (MailManager.Instance._allPlayerMails[id].Header.Attachments <= 0)
+            if (mail.Header.ReceiverId != Self.Id)
+                return;
+
+            if (mail.Header.Attachments <= 0)
             {
                 // ReSharper disable ConditionIsAlwaysTrueOrFalse
-                if (MailManager.Instance._allPlayerMails[id].Header.Status != MailStatus.Read)
+                if (mail.Header.Status != MailStatus.Read)
                 {
-                    UnreadMailCount.UpdateReceived(MailManager.Instance._allPlayerMails[id].MailType, -1);
+                    UnreadMailCount.UpdateReceived(mail.MailType, -1);
                     Self.SendPacket(new SCMailDeletedPacket(isSent, id, true, UnreadMailCount));
                 }
                 else

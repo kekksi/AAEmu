@@ -984,18 +984,20 @@ public class HousingManager(
                 continue;
             }
 
-            var thisDoodadsItem = itemManager.GetItemByItemId(f.ItemId);
+            var thisDoodadsItem = f.ItemId > 0 ? itemManager.GetItemByItemId(f.ItemId) : null;
+            if (f.ItemId > 0 && thisDoodadsItem == null)
+            {
+                Logger.Warn($"ReturnHouseItemsToOwner - Furniture references missing item, DoodadObjId:{f.ObjId} Template:{f.TemplateId}, ItemId:{f.ItemId}");
+                continue;
+            }
+
             var returnedThisItem = false;
 
             var wantReturned = (newOwner == null && decoInfo.Restore) || forceRestoreAllDecor;
 
             // If item is bound, always return it owner
-            if (f.ItemId > 0)
-            {
-                var item = itemManager.GetItemByItemId(f.ItemId);
-                if (item.ItemFlags.HasFlag(ItemFlag.SoulBound))
-                    wantReturned = true;
-            }
+            if (thisDoodadsItem?.ItemFlags.HasFlag(ItemFlag.SoulBound) == true)
+                wantReturned = true;
 
             // If this doodad is a Coffer and has a ItemContainer attached, also return all item of that container
             if (f is DoodadCoffer coffer && f.GetItemContainerId() > 0)
@@ -1022,7 +1024,7 @@ public class HousingManager(
                 {
                     // Just delete the doodad and attached item if no new owner
                     // Delete the attached item
-                    if (f.ItemId != 0)
+                    if (thisDoodadsItem != null)
                         thisDoodadsItem._holdingContainer?.ConsumeItem(ItemTaskType.Invalid,
                             thisDoodadsItem.TemplateId, thisDoodadsItem.Count, thisDoodadsItem);
 
@@ -1037,8 +1039,8 @@ public class HousingManager(
                     if (f.ItemId != 0)
                     {
                         // If a single item is attached, change it's owner and location
-                        var item = itemManager.GetItemByItemId(f.ItemId);
-                        newOwner.Inventory.SystemContainer.AddOrMoveExistingItem(ItemTaskType.Invalid, item);
+                        if (thisDoodadsItem != null)
+                            newOwner.Inventory.SystemContainer.AddOrMoveExistingItem(ItemTaskType.Invalid, thisDoodadsItem);
                     }
                     // Change doodad owner
                     f.OwnerId = newOwner.Id;
@@ -1416,7 +1418,14 @@ public class HousingManager(
 
         // NOTE: check tax due maybe ?
 
-        if (!character.TrySpendMoney(SlotType.Inventory, (int)house.SellPrice, ItemTaskType.BuyHouse))
+        if (house.SellPrice > int.MaxValue)
+        {
+            character.SendErrorMessage(ErrorMessageType.HouseCannotBuyAsSaleInfoChanged);
+            return false;
+        }
+
+        var salePrice = (int)house.SellPrice;
+        if (!character.TrySpendMoney(SlotType.Inventory, salePrice, ItemTaskType.BuyHouse))
         {
             // Not enough money
             character.SendErrorMessage(ErrorMessageType.HouseCannotBuyAsNotEnoughMoney);
@@ -1460,7 +1469,7 @@ public class HousingManager(
             Body =
             {
                 Text = "body('" + character.Name + "', '" + house.Name + "', " + house.SellPrice.ToString() + ")",
-                CopperCoins = (int)house.SellPrice, // add the money
+                CopperCoins = salePrice, // add the money
                 SendDate = DateTime.UtcNow,
                 RecvDate = DateTime.UtcNow.AddMilliseconds(1)
             }
@@ -1567,6 +1576,11 @@ public class HousingManager(
 
         // Create decoration doodad
         var decorationDesign = HousingGameData.Instance.GetDecorationDesignFromId(designId);
+        if (decorationDesign == null)
+        {
+            player.SendErrorMessage(ErrorMessageType.FailedToUseItem);
+            return false;
+        }
 
         // TODO: Validate if designId is correct for the given item
         /*
