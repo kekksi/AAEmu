@@ -163,6 +163,39 @@ public class CharacterCraft(Character owner)
         Count = count;
         DoodadId = doodadId;
 
+        if (craft.ReqDoodadId > 0)
+        {
+            var reqDoodad = Owner.ParentWorld.GetDoodad(doodadId);
+            if (reqDoodad == null || reqDoodad.TemplateId != craft.ReqDoodadId)
+            {
+                Owner.SendErrorMessage(ErrorMessageType.CraftInvalidCraftType);
+                CancelCraft();
+                return;
+            }
+        }
+
+        if (craft.ToolId > 0 &&
+            !Owner.Inventory.CheckItems(SlotType.Inventory, craft.ToolId, 1) &&
+            !Owner.Inventory.CheckItems(SlotType.Equipment, craft.ToolId, 1))
+        {
+            Owner.SendErrorMessage(ErrorMessageType.CraftCantActAnyMore, ErrorMessageType.NotEnoughRequiredItem, 0, false);
+            CancelCraft();
+            return;
+        }
+
+        if (craft.ActabilityLimit > 0 && craft.AcId > 0)
+        {
+            var actAbilityId = CharacterManager.Instance.GetActabilityIdByCategoryId(craft.AcId);
+            if (actAbilityId == 0 ||
+                !Owner.Actability.Actabilities.TryGetValue(actAbilityId, out var actability) ||
+                actability.Step < craft.ActabilityLimit)
+            {
+                Owner.SendErrorMessage(ErrorMessageType.CraftCantActAnyMore, ErrorMessageType.CraftLowExpert, 0, false);
+                CancelCraft();
+                return;
+            }
+        }
+
         // check if you are equipped with a backpack or glider
         if (!Owner.Inventory.CanReplaceGliderInBackpackSlot())
         {

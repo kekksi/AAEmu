@@ -67,7 +67,12 @@ public class CSSpawnSlavePacket() : GamePacket(CSOffsets.CSSpawnSlavePacket, 1)
         }
 
         using var spawnPosition = new Transform(null, null, owner.Transform.ZoneId, owner.Transform.InstanceId, x, y, z, zRot);
-        owner.ParentWorld.SlaveManager.Create(owner, null, slaveId, summonItem, hideSpawnEffect, spawnPosition);
+        var spawnedSlave = owner.ParentWorld.SlaveManager.Create(owner, null, slaveId, summonItem, hideSpawnEffect, spawnPosition);
+        if (spawnedSlave == null)
+        {
+            Logger.Warn($"SpawnSlave rejected for {owner.Name} ({owner.Id}): active slave could not be replaced");
+            return;
+        }
 
         Logger.Debug($"SpawnSlave created for {owner.Name} ({owner.Id}): slave {slaveId}, item {itemId}, position {requestedPosition}");
     }

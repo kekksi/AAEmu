@@ -28,7 +28,20 @@ public class FishingLoot : SpecialEffectAction
 
         Logger.Debug("Special effects: FishingLoot value1 {0}, value2 {1}, value3 {2}, value4 {3}", value1, value2, value3, value4);
 
-        var zoneGroupId = ZoneManager.Instance.GetZoneByKey(target.Transform.ZoneId).GroupId;
+        if (target?.Transform == null)
+        {
+            Logger.Warn($"{character.Name} tried to fish without a valid target.");
+            return;
+        }
+
+        var zone = ZoneManager.Instance.GetZoneByKey(target.Transform.ZoneId);
+        if (zone == null)
+        {
+            Logger.Warn($"{character.Name} seems to be trying to fish out of bounds.");
+            return;
+        }
+
+        var zoneGroupId = zone.GroupId;
         var zoneGroup = ZoneManager.Instance.GetZoneGroupById(zoneGroupId);
         if (zoneGroup == null)
         {

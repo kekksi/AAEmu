@@ -85,6 +85,12 @@ public class GradeEnchant : SpecialEffectAction
             return;
         }
 
+        if (GetNextGrade(gradeTemplate, 1) == null)
+        {
+            Reject(character, skill, ErrorMessageType.GradeEnchantMax, $"item {item.Id} is already at max grade {item.Grade}");
+            return;
+        }
+
         var tasks = new List<ItemTask>();
 
         var cost = GoldCost(gradeTemplate, item, value3);
@@ -105,9 +111,9 @@ public class GradeEnchant : SpecialEffectAction
         if (useCharm)
         {
             charmItem = character.Inventory.GetItemById(charm.SupportItemId);
-            if (charmItem == null)
+            if (charmItem == null || charmItem._holdingContainer?.ContainerType != SlotType.Inventory)
             {
-                Reject(character, skill, ErrorMessageType.NotEnoughRequiredItem, $"support item {charm.SupportItemId} was not found");
+                Reject(character, skill, ErrorMessageType.NotEnoughRequiredItem, $"support item {charm.SupportItemId} was not found in inventory");
                 return;
             }
 
@@ -133,6 +139,18 @@ public class GradeEnchant : SpecialEffectAction
             // tasksRemove.Add(InventoryHelper.GetTaskAndRemoveItem(character, charmItem, 1));
         }
 
+        if (character.Money < cost)
+        {
+            Reject(character, skill, ErrorMessageType.NotEnoughMoney, $"needs {cost} copper, has {character.Money}");
+            return;
+        }
+
+        if (useCharm && character.Inventory.Bag.ConsumeItem(ItemTaskType.GradeEnchant, charmItem.TemplateId, 1, charmItem) != 1)
+        {
+            Reject(character, skill, ErrorMessageType.NotEnoughRequiredItem, $"support item {charmItem.TemplateId} could not be consumed");
+            return;
+        }
+
         if (!character.TrySpendMoney(SlotType.Inventory, cost, ItemTaskType.GradeEnchant))
         {
             Reject(character, skill, ErrorMessageType.NotEnoughMoney, $"needs {cost} copper, has {character.Money}");
@@ -155,8 +173,6 @@ public class GradeEnchant : SpecialEffectAction
         // Consume
         // TODO: Handled by skill already, do more tests
         // character.Inventory.PlayerInventory.ConsumeItem(ItemTaskType.GradeEnchant, scroll.ItemTemplateId, 1, character.Inventory.GetItemById(scroll.ItemId));
-        if (useCharm)
-            character.Inventory.Bag.ConsumeItem(ItemTaskType.GradeEnchant, charmItem.TemplateId, 1, charmItem);
 
         character.SendPacket(new SCGradeEnchantResultPacket((byte)result, item, initialGrade, item.Grade));
         character.BroadcastPacket(new SCSkillEndedPacket(skill.TlId), true);
@@ -199,11 +215,19 @@ public class GradeEnchant : SpecialEffectAction
             {
                 // TODO : Refactor
                 var increase = useCharm ? 2 + charmInfo.AddGreatSuccessGrade : 2;
-                item.Grade = (byte)GetNextGrade(gradeTemplate, increase).Grade;
+                if (!TrySetNextGrade(item, gradeTemplate, increase))
+                {
+                    if (!TrySetNextGrade(item, gradeTemplate, 1))
+                        return GradeEnchantResult.Fail;
+
+                    return GradeEnchantResult.Success;
+                }
                 return GradeEnchantResult.GreatSuccess;
             }
 
-            item.Grade = (byte)GetNextGrade(gradeTemplate, 1).Grade;
+            if (!TrySetNextGrade(item, gradeTemplate, 1))
+                return GradeEnchantResult.Fail;
+
             return GradeEnchantResult.Success;
         }
 
@@ -285,6 +309,16 @@ public class GradeEnchant : SpecialEffectAction
     private static GradeTemplate GetNextGrade(GradeTemplate currentGrade, int gradeChange)
     {
         return ItemManager.Instance.GetGradeTemplateByOrder(currentGrade.GradeOrder + gradeChange);
+    }
+
+    private static bool TrySetNextGrade(Item item, GradeTemplate currentGrade, int gradeChange)
+    {
+        var nextGrade = GetNextGrade(currentGrade, gradeChange);
+        if (nextGrade == null)
+            return false;
+
+        item.Grade = (byte)nextGrade.Grade;
+        return true;
     }
 
     private static int GetCharmChance(int baseChance, int charmRatio, int charmMul)

@@ -49,6 +49,11 @@ public class FishDetailsGameData : Singleton<FishDetailsGameData>, IGameDataLoad
             return null;
         }
 
+        if (!_fishDetails.ContainsKey(templateId))
+        {
+            return null;
+        }
+
         var newItem = ItemManager.Instance.Create(templateId, 1, 0);
 
         var fish = new BigFish(newItem.Id, template, 1);
@@ -65,8 +70,13 @@ public class FishDetailsGameData : Singleton<FishDetailsGameData>, IGameDataLoad
             return null;
         }
 
+        if (!_fishDetails.ContainsKey(item.TemplateId))
+        {
+            return null;
+        }
+
         var fish = new BigFish(item.Id, template, 1) { CreateTime = DateTime.UtcNow };
-        (fish.Length, fish.Weight) = GetFishSize(item.MadeUnitId);
+        (fish.Length, fish.Weight) = GetFishSize(item.TemplateId);
 
         var byteArray = new byte[16];
         Buffer.BlockCopy(BitConverter.GetBytes(fish.Weight), 0, byteArray, 0, 4);

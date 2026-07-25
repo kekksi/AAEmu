@@ -76,6 +76,11 @@ public class ItemSocketing : SpecialEffectAction
                 }
             }
 
+            if (gemCount >= equipItem.GemIds.Length)
+            {
+                return;
+            }
+
             // Roll for Success
             var gemRoll = Random.Shared.Next(0, 10000);
             var gemChance = ItemManager.Instance.GetSocketChance(gemCount); // fetches chances from sqlite3
@@ -90,10 +95,6 @@ public class ItemSocketing : SpecialEffectAction
             else
             {
                 // Failed!
-                for (var i = 0; i < equipItem.GemIds.Length; i++)
-                {
-                    equipItem.GemIds[i] = 0;
-                }
             }
             installed = true;
         }

@@ -113,7 +113,7 @@ public class SlaveManager(WorldInstance parentWorldInstance)
         return null;
     }
 
-    private Slave GetSlaveByDbId(uint dbId)
+    public Slave GetSlaveByDbId(uint dbId)
     {
         lock (_slaveListLock)
         {
@@ -342,6 +342,18 @@ public class SlaveManager(WorldInstance parentWorldInstance)
     /// <returns>Newly created Slave</returns>
     public Slave Create(Character owner, SlaveSpawner useSpawner, uint templateId, Item item = null, bool hideSpawnEffect = false, Transform positionOverride = null)
     {
+        if (owner != null)
+        {
+            var activeSlaveInfo = GetActiveSlaveByOwnerObjId(owner.ObjId);
+            if (activeSlaveInfo != null)
+            {
+                activeSlaveInfo.Save();
+                Delete(owner, activeSlaveInfo.ObjId, false);
+                if (GetSlaveByObjId(activeSlaveInfo.ObjId) != null)
+                    return null;
+            }
+        }
+
         var slaveTemplate = SlaveGameData.Instance.GetSlaveTemplate(useSpawner?.UnitId ?? templateId);
         if (slaveTemplate == null) return null;
 

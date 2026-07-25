@@ -39,7 +39,13 @@ public class DoodadFuncRecoverItem : DoodadFuncTemplate
                     switch (owner.OwnerType)
                     {
                         case DoodadOwnerType.Slave:
-                            ownerGameObject = character.ParentWorld.SlaveManager.GetSlaveByObjId(owner.OwnerDbId);
+                            var slave = character.ParentWorld?.SlaveManager.GetSlaveByDbId(owner.OwnerDbId);
+                            if (slave == null || (slave.OwnerId != character.Id && slave.Summoner?.Id != character.Id))
+                            {
+                                character.SendErrorMessage(ErrorMessageType.InteractionPermissionDeny);
+                                return;
+                            }
+                            ownerGameObject = slave;
                             break;
                         case DoodadOwnerType.Housing:
                             ownerGameObject = HousingManager.Instance.GetHouseById(owner.OwnerDbId);
