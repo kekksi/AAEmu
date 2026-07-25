@@ -1676,4 +1676,34 @@ public class HousingManager(
         }
         return null;
     }
+
+    /// <summary>
+    /// Sums the crafting actability bonus granted by furniture placed in the given house for a specific actability group.
+    /// Each furniture template is counted once.
+    /// </summary>
+    public uint GetActAbilityBonusFromHouse(uint actabilityGroupId, House house)
+    {
+        var res = 0u;
+        if (actabilityGroupId == 0 || house?.ParentWorld == null)
+            return res;
+
+        var furniture = house.ParentWorld.GetDoodadByHouseDbId(house.Id);
+        var bonusByDoodadTemplate = new Dictionary<uint, uint>(); // count each furniture type once
+        foreach (var f in furniture)
+        {
+            // Ignore attached objects (doors/windows etc) and the for-sale marker
+            if (f.AttachPoint != AttachPointKind.None)
+                continue;
+            if (f.TemplateId == ForSaleMarkerDoodadId)
+                continue;
+
+            var decoDesign = HousingGameData.Instance.GetDecorationDesignFromDoodadId(f.TemplateId);
+            if (decoDesign != null && decoDesign.ActabilityGroupId == actabilityGroupId)
+                bonusByDoodadTemplate.TryAdd(f.TemplateId, decoDesign.ActabilityUp);
+        }
+
+        foreach (var bonus in bonusByDoodadTemplate.Values)
+            res += bonus;
+        return res;
+    }
 }

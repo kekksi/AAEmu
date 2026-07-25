@@ -186,9 +186,13 @@ public class CharacterCraft(Character owner)
         if (craft.ActabilityLimit > 0 && craft.AcId > 0)
         {
             var actAbilityId = CharacterManager.Instance.GetActabilityIdByCategoryId(craft.AcId);
-            if (actAbilityId == 0 ||
-                !Owner.Actability.Actabilities.TryGetValue(actAbilityId, out var actability) ||
-                actability.Step < craft.ActabilityLimit)
+            Owner.Actability.Actabilities.TryGetValue(actAbilityId, out var actability);
+            int currentStep = actability?.Step ?? 0;
+            // Furniture placed in the player's house grants bonus craft points for its actability group
+            var craftHouse = HousingManager.Instance.GetHouseAtLocation(Owner.Transform.World.Position.X, Owner.Transform.World.Position.Y);
+            if (craftHouse != null)
+                currentStep += (int)HousingManager.Instance.GetActAbilityBonusFromHouse(actAbilityId, craftHouse);
+            if (actAbilityId == 0 || currentStep < craft.ActabilityLimit)
             {
                 Owner.SendErrorMessage(ErrorMessageType.CraftCantActAnyMore, ErrorMessageType.CraftLowExpert, 0, false);
                 CancelCraft();
