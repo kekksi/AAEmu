@@ -18,7 +18,11 @@ public class DoodadFuncGrowth : DoodadPhaseFuncTemplate
     {
         // TODO: Add doodad scaling transformation
         owner.Scale = StartScale / 1000f;
-        var customDelay = Delay / AppConfiguration.Instance.World.GrowthRate; // decrease delay
+        var growthRate = AppConfiguration.Instance.World.GrowthRate;
+        if (growthRate <= 0 || double.IsNaN(growthRate) || double.IsInfinity(growthRate))
+            growthRate = 1.0;
+
+        var customDelay = Delay / growthRate; // decrease delay
         if (ZoneManager.Instance.DoodadHasMatchingClimate(owner))
             customDelay = customDelay * 0.73f;
         var timeLeft = customDelay;

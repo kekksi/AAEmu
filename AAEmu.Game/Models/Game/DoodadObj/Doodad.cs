@@ -839,7 +839,11 @@ public class Doodad : BaseUnit
     public void InitDoodad()
     {
         // Apply Climate settings
-        var growTime = Template.TotalDoodadGrowthTime / AppConfiguration.Instance.World.GrowthRate;
+        var growthRate = AppConfiguration.Instance.World.GrowthRate;
+        if (growthRate <= 0 || double.IsNaN(growthRate) || double.IsInfinity(growthRate))
+            growthRate = 1.0;
+
+        var growTime = Template.TotalDoodadGrowthTime / growthRate;
         if (Template.TotalDoodadGrowthTime > 0 && ZoneManager.Instance.DoodadHasMatchingClimate(this))
         {
             growTime = (int)Math.Round(growTime * 0.73f);

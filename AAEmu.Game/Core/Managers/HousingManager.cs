@@ -1,4 +1,5 @@
-﻿using System.Drawing;
+﻿using System.Collections.Concurrent;
+using System.Drawing;
 using System.Numerics;
 
 using AAEmu.Commons.Utils;
@@ -54,8 +55,8 @@ public class HousingManager(
     private const int MaxHeavyTaxCounted = 10; // Maximum number of heavy tax buildings to take into account for tax calculation
     private const int HoursForFailedTaxToReturnHouse = 22;
     private const double CopperPerCertificate = 1000000.0; // For older versions of AA, 1 sale certificate / 100g
-    private Dictionary<uint, House> _houses = [];
-    private Dictionary<ushort, House> _housesTl = []; // TODO or so mb tlId is id in the active zone? or type of house
+    private ConcurrentDictionary<uint, House> _houses = [];
+    private ConcurrentDictionary<ushort, House> _housesTl = []; // TODO or so mb tlId is id in the active zone? or type of house
     private List<uint> _removedHousings = [];
     private bool _isCheckingTaxTiming;
 
@@ -180,8 +181,8 @@ public class HousingManager(
                         house.SellToPlayerId = reader.GetUInt32("sell_to");
                         house.SellPrice = reader.GetUInt32("sell_price");
                         house.AllowRecover = reader.GetBoolean("allow_recover");
-                        _houses.Add(house.Id, house);
-                        _housesTl.Add(house.TlId, house);
+                        _houses.TryAdd(house.Id, house);
+                        _housesTl.TryAdd(house.TlId, house);
 
                         // Manually placed houses (or after upgrading MySQL), will get 2 weeks for free as to not immediately trigger them into demolition
                         if (house.PlaceDate == house.ProtectionEndDate)
@@ -599,8 +600,21 @@ public class HousingManager(
         house.AllowRecover = true;
         house.PlaceDate = DateTime.UtcNow;
         house.ProtectionEndDate = DateTime.UtcNow.AddDays(AppConfiguration.Instance.World.DaysForTaxPayment);
-        _houses.Add(house.Id, house);
-        _housesTl.Add(house.TlId, house);
+        if (!_houses.TryAdd(house.Id, house))
+        {
+            Logger.Error($"Failed to add house {house.Id} for player {connection.ActiveChar.Name}: duplicate housing id");
+            connection.ActiveChar.SendErrorMessage(ErrorMessageType.InvalidHouseInfo);
+            return;
+        }
+
+        if (!_housesTl.TryAdd(house.TlId, house))
+        {
+            _houses.TryRemove(house.Id, out _);
+            Logger.Error($"Failed to add house {house.Id} for player {connection.ActiveChar.Name}: duplicate tl id {house.TlId}");
+            connection.ActiveChar.SendErrorMessage(ErrorMessageType.InvalidHouseInfo);
+            return;
+        }
+
         connection.ActiveChar.SendPacket(new SCMyHousePacket(house));
         house.Spawn();
         UpdateTaxInfo(house);
@@ -713,8 +727,8 @@ public class HousingManager(
     {
         // Remove house from housing tables
         _removedHousings.Add(house.Id);
-        _houses.Remove(house.Id);
-        _housesTl.Remove(house.TlId);
+        _houses.TryRemove(house.Id, out _);
+        _housesTl.TryRemove(house.TlId, out _);
         housingTldManager.ReleaseId(house.TlId);
         housingIdManager.ReleaseId(house.Id);
         // TODO: not sure how to handle this, just instant delete it for now
@@ -745,8 +759,7 @@ public class HousingManager(
         oneWeekTaxCount = 0;
 
         var userHouses = new Dictionary<uint, House>();
-        if (GetByAccountId(userHouses, accountId) <= 0)
-            return false;
+        GetByAccountId(userHouses, accountId);
 
         // Count the houses on this account
         foreach (var h in userHouses)
@@ -845,7 +858,7 @@ public class HousingManager(
     /// <returns></returns>
     public House GetHouseById(uint houseId)
     {
-        return _houses.GetValueOrDefault(houseId);
+        return _houses.TryGetValue(houseId, out var house) ? house : null;
     }
 
     /// <summary>
@@ -855,7 +868,7 @@ public class HousingManager(
     /// <returns></returns>
     private House GetHouseByTlId(ushort houseTlId)
     {
-        return _housesTl.GetValueOrDefault(houseTlId);
+        return _housesTl.TryGetValue(houseTlId, out var house) ? house : null;
     }
 
     /// <summary>

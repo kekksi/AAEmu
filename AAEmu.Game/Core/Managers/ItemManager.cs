@@ -150,6 +150,9 @@ public class ItemManager(ISkillManager skillManager, IItemIdManager itemIdManage
         foreach (var lootPackConvertFish in lootPackConvertFishes)
         {
             var lootPacks = LootGameData.Instance.GetPack(lootPackConvertFish.LootPackId);
+            if (lootPacks == null)
+                continue;
+
             var dropRateMax = (uint)0;
             for (var ui = 0; ui < lootPacks.Loots?.Count; ui++)
             {
@@ -2088,14 +2091,19 @@ public class ItemManager(ISkillManager skillManager, IItemIdManager itemIdManage
 
     public bool UnwrapItem(Character character, SlotType slotType, byte slot, ulong itemId)
     {
-        var item = GetItemByItemId(itemId);
+        var item = character.Inventory.GetItemById(itemId);
         if (item == null)
+            return false;
+        if (item.OwnerId != character.Id)
             return false;
         if (item.SlotType != slotType || item.Slot != slot)
         {
             Logger.Warn($"UnwrapItem: Requested item position does not match up for {itemId} of user {character.Name}");
             return false;
         }
+        if (item.Template?.BindType != ItemBindType.BindOnUnpack || item.HasFlag(ItemFlag.Unpacked))
+            return false;
+
         item.UnpackTime = DateTime.UtcNow;//.AddDays(-30).AddSeconds(15);
         item.SetFlag(ItemFlag.Unpacked);
         if (item.Template.BindType == ItemBindType.BindOnUnpack)
