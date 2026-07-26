@@ -3080,9 +3080,12 @@ public class DoodadManager(IObjectIdManager objectIdManager, IDoodadIdManager do
             return false;
         }
 
-        // TODO: Check permissions
+        // Only players the coffer's house permission allows may open it.
+        if (!coffer.AllowedToInteract(character))
+            return false;
 
         coffer.OpenedBy = character;
+        character.OpenedCofferContainerId = coffer.ItemContainer?.ContainerId ?? 0;
 
         byte firstSlot = 0;
         while (firstSlot < coffer.Capacity)
@@ -3109,6 +3112,7 @@ public class DoodadManager(IObjectIdManager objectIdManager, IDoodadIdManager do
         }
 
         coffer.OpenedBy = null;
+        character.OpenedCofferContainerId = 0;
 
         return true;
     }

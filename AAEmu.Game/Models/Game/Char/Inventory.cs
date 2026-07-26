@@ -950,7 +950,12 @@ public class Inventory
 
     public bool SwapCofferItems(ulong fromItemId, ulong toItemId, SlotType fromSlotType, byte fromSlot, SlotType toSlotType, byte toSlot, ulong dbId)
     {
-        // TODO: Verify if you have access to the coffer
+        // The client only sends the raw container dbId. Authorize by requiring
+        // that this character currently has exactly this coffer open (opening is
+        // permission-gated in DoodadManager.OpenCofferDoodad). Without this any
+        // player could move items out of any house coffer by its dbId.
+        if (dbId == 0 || Owner is not Character cofferOwner || cofferOwner.OpenedCofferContainerId != dbId)
+            return false;
 
         var relatedCoffer = ItemManager.Instance.GetItemContainerByDbId(dbId);
 
@@ -979,7 +984,12 @@ public class Inventory
 
     public bool SplitCofferItems(int count, ulong fromItemId, ulong toItemId, SlotType fromSlotType, byte fromSlot, SlotType toSlotType, byte toSlot, ulong dbId)
     {
-        // TODO: Verify if you have access to the coffer
+        // The client only sends the raw container dbId. Authorize by requiring
+        // that this character currently has exactly this coffer open (opening is
+        // permission-gated in DoodadManager.OpenCofferDoodad). Without this any
+        // player could move items out of any house coffer by its dbId.
+        if (dbId == 0 || Owner is not Character cofferOwner || cofferOwner.OpenedCofferContainerId != dbId)
+            return false;
 
         var relatedCoffer = ItemManager.Instance.GetItemContainerByDbId(dbId);
 

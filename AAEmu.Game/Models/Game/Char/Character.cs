@@ -197,6 +197,12 @@ public partial class Character : Unit, ICharacter
 
     // public Item[] BuyBack { get; set; }
     public ItemContainer BuyBackItems { get; set; }
+    /// <summary>
+    /// ContainerId of the house coffer this character currently has open, or 0.
+    /// Used to authorize coffer item swaps/splits, which only receive the raw
+    /// container dbId from the client.
+    /// </summary>
+    public ulong OpenedCofferContainerId { get; set; }
     public BondDoodad Bonding { get; set; }
     public CharacterQuests Quests { get; set; }
     public CharacterMails Mails { get; set; }
