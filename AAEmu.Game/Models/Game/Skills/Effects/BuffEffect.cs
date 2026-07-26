@@ -20,6 +20,11 @@ public class BuffEffect : EffectTemplate
         CastAction castObj, EffectSource source, SkillObject skillObject, DateTime time,
         CompressedGamePackets packetBuilder = null)
     {
+        // The referenced buff template may be missing (buff_effects.buff_id points to a non-existent buff);
+        // applying such an effect would dereference a null Buff below (RequireBuffId/Id/new Buff).
+        if (Buff == null)
+            return;
+
         if (target is Unit trg)
         {
             var hitType = SkillHitType.Invalid;
