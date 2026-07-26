@@ -482,6 +482,13 @@ public class Skill
                         return null; // Not allowed on self
                     }
 
+                    // target can be null if the client sent an ObjId that no longer
+                    // resolves (ally logged out / despawned). GetRelationStateTo would
+                    // then NRE and drop the caster's session, so bail out like the
+                    // Friendly / Hostile branches do.
+                    if (target == null)
+                        return null;
+
                     var relation2 = caster.GetRelationStateTo(target);
                     if (relation2 != RelationState.Friendly && relation2 != RelationState.Neutral)
                         return null; // Target isn't friendly
