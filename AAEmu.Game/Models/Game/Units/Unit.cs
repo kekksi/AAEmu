@@ -991,7 +991,13 @@ public class Unit : BaseUnit, IUnit
 
     public virtual SkillResult UseSkill(uint skillId, IUnit target)
     {
-        var skill = new Skill(SkillManager.Instance.GetSkillTemplate(skillId));
+        var skillTemplate = SkillManager.Instance.GetSkillTemplate(skillId);
+        if (skillTemplate == null)
+        {
+            return SkillResult.InvalidSkill;
+        }
+
+        var skill = new Skill(skillTemplate);
 
         var caster = SkillCaster.GetByType(SkillCasterType.Unit);
         caster.ObjId = ObjId;
@@ -1004,7 +1010,13 @@ public class Unit : BaseUnit, IUnit
 
     public virtual SkillResult UseSkill(uint skillId, Doodad target)
     {
-        var skill = new Skill(SkillManager.Instance.GetSkillTemplate(skillId));
+        var skillTemplate = SkillManager.Instance.GetSkillTemplate(skillId);
+        if (skillTemplate == null)
+        {
+            return SkillResult.InvalidSkill;
+        }
+
+        var skill = new Skill(skillTemplate);
 
         var caster = SkillCaster.GetByType(SkillCasterType.Unit);
         caster.ObjId = ObjId;

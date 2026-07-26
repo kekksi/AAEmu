@@ -65,7 +65,8 @@ public class CSStartSkillPacket() : GamePacket(CSOffsets.CSStartSkillPacket, 1)
         Logger.Trace($"StartSkill: Id {skillId}, flag {flag}, caster={skillCaster.ObjId}, target={skillCastTarget.ObjId}");
 
         // Null-guard: unknown/missing skill template would crash (new Skill(null) derefs template.Id). BUGS-1.2 fix.
-        if (SkillManager.Instance.GetSkillTemplate(skillId) == null)
+        var requestedSkillTemplate = SkillManager.Instance.GetSkillTemplate(skillId);
+        if (requestedSkillTemplate == null)
         {
             Logger.Warn($"StartSkill: skillId {skillId} has no template, ignoring (caster={skillCaster.ObjId})");
             return;
@@ -86,7 +87,7 @@ public class CSStartSkillPacket() : GamePacket(CSOffsets.CSStartSkillPacket, 1)
         {
             // Mount or Slave skill
             Logger.Trace($"SkillCasterMount - MountSkillTemplateId {scm.MountSkillTemplateId}");
-            skill = new Skill(SkillManager.Instance.GetSkillTemplate(skillId));
+            skill = new Skill(requestedSkillTemplate);
 
             var caster = world.GetBaseUnit(skillCaster.ObjId);
             var mate = caster as Mate;
@@ -130,7 +131,7 @@ public class CSStartSkillPacket() : GamePacket(CSOffsets.CSStartSkillPacket, 1)
         else if (SkillManager.Instance.IsDefaultSkill(skillId) || SkillManager.Instance.IsCommonSkill(skillId) && skillCaster is not SkillItem)
         {
             // Is it a common skill?
-            var skillTemplate = SkillManager.Instance.GetSkillTemplate(skillId);
+            var skillTemplate = requestedSkillTemplate;
 
             // Skill 3 is the offhand swing. It must never become the primary
             // auto-attack when the client requests it while a shield is equipped;
@@ -140,6 +141,11 @@ public class CSStartSkillPacket() : GamePacket(CSOffsets.CSStartSkillPacket, 1)
                     { HoldableTemplate: { SlotTypeId: (uint)EquipmentItemSlotType.Shield } })
             {
                 skillTemplate = SkillManager.Instance.GetSkillTemplate(2);
+            }
+
+            if (skillTemplate == null)
+            {
+                return;
             }
 
             skill = new Skill(skillTemplate); // TODO: переделать / rewrite ...
@@ -160,20 +166,20 @@ public class CSStartSkillPacket() : GamePacket(CSOffsets.CSStartSkillPacket, 1)
             if (si.SkillSourceItem == null || skillId != si.SkillSourceItem.Template.UseSkillId && si.SkillSourceItem.Template.BindType != ItemBindType.BindOnPickup)
                 return;
             // si.ItemTemplateId = item.TemplateId;
-            skill = new Skill(SkillManager.Instance.GetSkillTemplate(skillId));
+            skill = new Skill(requestedSkillTemplate);
             skillResult = skill.Use(player, skillCaster, skillCastTarget, skillObject, false, out skillResultErrorValue);
         }
         else if (Connection.ActiveChar.Skills.Skills.ContainsKey(skillId))
         {
             // Is it one of our learned character skills?
-            var template = SkillManager.Instance.GetSkillTemplate(skillId);
+            var template = requestedSkillTemplate;
             skill = new Skill(template, Connection.ActiveChar);
             skillResult = skill.Use(Connection.ActiveChar, skillCaster, skillCastTarget, skillObject, false, out skillResultErrorValue);
         }
         else if (skillId > 0 && Connection.ActiveChar.Skills.IsVariantOfSkill(skillId))
         {
             // Variant of learned skill?
-            skill = new Skill(SkillManager.Instance.GetSkillTemplate(skillId));
+            skill = new Skill(requestedSkillTemplate);
             skillResult = skill.Use(Connection.ActiveChar, skillCaster, skillCastTarget, skillObject, false, out skillResultErrorValue);
         }
         else
@@ -181,7 +187,7 @@ public class CSStartSkillPacket() : GamePacket(CSOffsets.CSStartSkillPacket, 1)
             // No idea what this is
             Logger.Warn($"StartSkill: Id {skillId}, undefined use type");
             // If it's a valid skill cast it. This fixes interactions with quest items/doodads.
-            skill = new Skill(SkillManager.Instance.GetSkillTemplate(skillId));
+            skill = new Skill(requestedSkillTemplate);
             skillResult = skill.Use(Connection.ActiveChar, skillCaster, skillCastTarget, skillObject, false, out skillResultErrorValue);
         }
 

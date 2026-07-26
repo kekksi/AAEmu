@@ -26,7 +26,13 @@ public class DoodadFuncSkillHit : DoodadFuncTemplate
                 var target = SkillCastTarget.GetByType(SkillCastTargetType.Doodad);
                 target.ObjId = owner.ObjId;
 
-                var skill = new Skill(SkillManager.Instance.GetSkillTemplate(SkillId));
+                var skillTemplate = SkillManager.Instance.GetSkillTemplate(SkillId);
+                if (skillTemplate == null)
+                {
+                    return;
+                }
+
+                var skill = new Skill(skillTemplate);
 
                 if (skillCaster is SkillItem sc)
                 {

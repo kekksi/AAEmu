@@ -43,7 +43,13 @@ public class DoodadFuncFakeUse : DoodadFuncTemplate
                 target.ObjId = owner.ParentObjId;
             }
 
-            var skill = new Skill(SkillManager.Instance.GetSkillTemplate(SkillId));
+            var skillTemplate = SkillManager.Instance.GetSkillTemplate(SkillId);
+            if (skillTemplate == null)
+            {
+                return;
+            }
+
+            var skill = new Skill(skillTemplate);
             skill.Use(caster, skillCaster, target, null, false, out _);
             owner.ToNextPhase = true;
         }
