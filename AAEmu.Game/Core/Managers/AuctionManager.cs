@@ -145,6 +145,15 @@ public class AuctionManager(IItemManager itemManager, INameManager nameManager, 
 
         if (bid.Money >= auctionLot.DirectMoney && auctionLot.DirectMoney != 0) // Buy now
         {
+            // Balance is never validated by SubtractMoney (it deducts through a path
+            // that has no floor), so a broke player could buy the lot and mint gold
+            // into the seller's/outbid bidder's mailbox. Reject before any side effect.
+            if (auctionLot.DirectMoney > player.Money)
+            {
+                player.SendErrorMessage(ErrorMessageType.NotEnoughMoney);
+                return;
+            }
+
             if (auctionLot.BidderId != 0) // send mail to person who bid if item was bought at full price.
             {
                 var newMail = new MailForAuction(auctionLot.Item.TemplateId, auctionLot.ClientId, auctionLot.DirectMoney, 0);
@@ -157,6 +166,13 @@ public class AuctionManager(IItemManager itemManager, INameManager nameManager, 
         }
         else if (bid.Money > auctionLot.BidMoney) // Bid
         {
+            // Same missing balance check as the buy-now path above.
+            if (bid.Money > player.Money)
+            {
+                player.SendErrorMessage(ErrorMessageType.NotEnoughMoney);
+                return;
+            }
+
             if (auctionLot.BidderName != "" && auctionLot.BidderId != 0) // Send mail to old bidder.
             {
                 // TODO: Read this from saved data
