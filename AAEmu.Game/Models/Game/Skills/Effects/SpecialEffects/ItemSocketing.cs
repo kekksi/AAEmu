@@ -94,7 +94,11 @@ public class ItemSocketing : SpecialEffectAction
             }
             else
             {
-                // Failed!
+                // Failed! In 1.2 a failed socket attempt clears all existing gems (retail behaviour)
+                for (var i = 0; i < equipItem.GemIds.Length; i++)
+                {
+                    equipItem.GemIds[i] = 0;
+                }
             }
             installed = true;
         }
