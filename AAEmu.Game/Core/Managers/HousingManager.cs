@@ -1246,6 +1246,12 @@ public class HousingManager(
         // Using the GM command does not send the seller (uses null), and thus will not require certificates
         if (seller != null)
         {
+            // Only the owner may put their own house up for sale. Without this any
+            // player could set an arbitrary sellable house on sale to themselves for
+            // 1 copper and then buy it, stealing the house and its coffer/furniture.
+            if (house.OwnerId != seller.Id)
+                return false;
+
             var certAmount = CalculateSaleCertifcates(house, price);
             if (seller.Inventory.Bag.ConsumeItem(ItemTaskType.BuyHouse, Item.AppraisalCertificate, certAmount, null) != certAmount)
             {
