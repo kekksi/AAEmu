@@ -375,6 +375,9 @@ public class PortalManager(ILocalizationManager localizationManager, IWorldManag
     public void OpenPortal(Character owner, SkillObjectPortalInfo portalEffectObj)
     {
         var portalInfo = owner.Portals.GetPortalInfo((uint)portalEffectObj.Id);
+        // Id comes straight from the client skill object; an unknown portal Id
+        // returns null here and would NRE on portalInfo.ZoneId below.
+        if (portalInfo == null) return;
         if (!CheckCanOpenPortal(owner, portalInfo.ZoneId)) return;
 
         var entrance = MakePortal(owner, false, portalInfo, portalEffectObj);   // Entrance (green)
