@@ -211,6 +211,9 @@ public class LootingContainer(IBaseUnit owner)
                     foreach (var singleItemInGroup in selectByGroup)
                     {
                         var item = ItemManager.Instance.Create(singleItemInGroup.itemId, singleItemInGroup.count, singleItemInGroup.grade, false);
+                        // Item template may be missing (dangling loot item id); skip instead of adding null (RegisterItems derefs Item.Id)
+                        if (item == null)
+                            continue;
                         resultsToAdd.Add(item);
                     }
                     RegisterItems(resultsToAdd);
