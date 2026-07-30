@@ -46,7 +46,11 @@ public class TunnelSession : ISession
     public object GetAttribute(string name) => _attributes.TryGetValue(name, out var v) ? v : null!;
     public void ClearAttribute(string name) => _attributes.TryRemove(name, out _);
 
-    // B2.4d: minimal. Later (B2.5/B2.6) Close will also signal the gateway to clear the ownership
-    // record for this connection in ClientRoutingTable.
-    public void Close() { }
+    // B2.5: placeholder activated - drop the zone-local GameConnection cached for this connection so a
+    // later reconnect starts fresh. Signaling the gateway to clear its ClientRoutingTable ownership
+    // record cross-process is B2.6.
+    public void Close()
+    {
+        GZClientPacketHandler.OnTunnelClosed(_connectionId);
+    }
 }

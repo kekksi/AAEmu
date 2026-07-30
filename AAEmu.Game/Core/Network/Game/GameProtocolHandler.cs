@@ -68,6 +68,9 @@ public class GameProtocolHandler : BaseProtocolHandler
                     Managers.ChatManager.Instance.LeaveAllChannels(con.ActiveChar);
                     // ObjectIdManager.Instance.ReleaseId(con.ActiveChar.BcId);
                 }
+                // B2.5 handoff: when a client disconnects, drop any zone-ownership record so the
+                // gateway stops tunneling frames for a connection that no longer exists.
+                ClientRoutingTable.Instance.ClearOwner(con.Id);
                 con.OnDisconnect();
                 StreamManager.Instance.RemoveToken(con.Id);
                 GameConnectionTable.Instance.RemoveConnection(session.SessionId);
