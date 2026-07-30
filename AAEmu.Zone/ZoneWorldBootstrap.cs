@@ -11,6 +11,7 @@ using AAEmu.Game.Core.Managers.World;
 using AAEmu.Game.GameData.Framework;
 using AAEmu.Game.Models;
 using AAEmu.Game.Models.Game.World;
+using AAEmu.Game.Models.Game.DoodadObj;
 
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -438,6 +439,103 @@ public static class ZoneWorldBootstrap
                     $"npcSpawners={npcSpawners} doodadSpawners={doodadSpawners} " +
                     $"transferSpawners={transferSpawners} gimmickSpawners={gimmickSpawners} " +
                     $"slaveSpawners={slaveSpawners}");
-        Logger.Info("[B2.2] Zone world bootstrap DONE (no tick, no client network).");
+        Logger.Info("[B2.2] Zone world bootstrap DONE (world created, no tick yet).");
+
+        // ==================================================================
+        // B2.3 - Spawn a representative subset + start the server tick loop.
+        // ==================================================================
+        // The monolith brings a world to life in GameService.StartAsync via:
+        //   TimeManager.Start() -> TaskManager.Start() -> WorldManager.CreateStaticInstances()
+        //   (SpawnAll) + WorldManager.Initialize() -> TickManager.Instance.Initialize()
+        //   (the single global tick thread). AIManager/TaskManager/TimeManager/WorldManager
+        //   all hang their periodic work off that one TickManager thread.
+        // We copy that ordering selectively, WITHOUT any client network / hosted service.
+        RunSpawnAndTick(provider, world);
+        Logger.Info("[B2.3] Zone spawn + tick loop LIVE (no client network).");
+    }
+
+    /// <summary>
+    /// B2.3 - start the periodic engines, spawn a RAM-bounded representative subset of
+    /// entities and start the global tick thread, then log a periodic heartbeat proving
+    /// the loop is alive with real entities. No client network (that is B2.4).
+    /// </summary>
+    private static void RunSpawnAndTick(IServiceProvider provider, WorldInstance world)
+    {
+        // Ensure the tick-related singletons are constructed (Singleton<T> registers its
+        // own static .Instance in its base ctor; resolving guarantees that side effect).
+        _ = provider.GetRequiredService<TimeManager>();
+        _ = provider.GetRequiredService<TaskManager>();
+        _ = provider.GetRequiredService<AIManager>();
+        _ = provider.GetRequiredService<TickManager>();
+
+        // --- Start the periodic engines (each SUBSCRIBES onto the TickManager thread) ---
+        TimeManager.Instance.Start();          // in-game day/night clock (own thread)
+        TaskManager.Instance.Start();          // cron/interval scheduled tasks (Tick @50ms)
+        AIManager.Instance.Initialize();       // NPC AI driver (Tick @100ms, async)
+        WorldManager.Instance.Initialize();    // ActiveRegionTick @1s + water probe @10s
+        Logger.Info("[B2.3] Periodic engines subscribed (Time/Task/AI/WorldManager).");
+
+        // --- Start THE global tick thread (invokes every subscriber ~every 20ms) --------
+        TickManager.Instance.Initialize();
+        Logger.Info("[B2.3] TickManager thread started.");
+
+        // --- Spawn a RAM-bounded representative subset ----------------------------------
+        // Full SpawnManager.SpawnAll() spawns all 42649 doodads (+ async Trial/FishSchool
+        // loads) and NPCs are LAZY (WorldManager.ActiveRegionTick only spawns them when a
+        // player is in radius - and B2.3 has no client). On a 6 GB box with no client we
+        // instead spawn a deterministic, bounded subset that proves entities really live
+        // in the instance AND get ticked. Each NPC spawn wires an NpcAi into AIManager, so
+        // the AI tick has real work to do (the strongest "it lives" proof).
+        const int NpcSpawnerBudget = 400;
+        const int DoodadSpawnerBudget = 4000;
+
+        // NPCs: force-spawn a bounded subset of the loaded spawners.
+        var allNpcSpawners = world.SpawnManager.GetAllSpawners().Values.SelectMany(x => x).ToList();
+        int npcSpawnersDone = 0, npcSpawnErrs = 0;
+        foreach (var sp in allNpcSpawners.Take(NpcSpawnerBudget))
+        {
+            try { sp.SpawnAll(true); npcSpawnersDone++; }
+            catch (Exception ex) { if (++npcSpawnErrs <= 3) Logger.Warn(ex, "[B2.3] npc spawner failed (swept)"); }
+        }
+
+        // Doodads: reach the private DoodadSpawners dict via reflection (same pattern as
+        // the B2.2 report block) and spawn a bounded subset.
+        int doodadSpawnersDone = 0, doodadSpawnErrs = 0;
+        var dsField = typeof(AAEmu.Game.Core.Managers.World.SpawnManager).GetField(
+            "<DoodadSpawners>k__BackingField", BindingFlags.NonPublic | BindingFlags.Instance);
+        if (dsField?.GetValue(world.SpawnManager) is Dictionary<uint, DoodadSpawner> dsDict)
+        {
+            foreach (var ds in dsDict.Values.Take(DoodadSpawnerBudget))
+            {
+                try { ds.Spawn(0); doodadSpawnersDone++; }
+                catch (Exception ex) { if (++doodadSpawnErrs <= 3) Logger.Warn(ex, "[B2.3] doodad spawner failed (swept)"); }
+            }
+        }
+
+        var npcCount = world.GetAllNpcs().Count;
+        var doodadCount = world.GetAllDoodads().Count;
+        Logger.Info($"[B2.3] Subset spawned: npcSpawners={npcSpawnersDone}/{NpcSpawnerBudget} (errs={npcSpawnErrs}) " +
+                    $"doodadSpawners={doodadSpawnersDone}/{DoodadSpawnerBudget} (errs={doodadSpawnErrs}) => " +
+                    $"live npcs={npcCount} doodads={doodadCount}");
+
+        // --- Heartbeat: prove the tick loop is ALIVE with entities ----------------------
+        // Subscribe our own heartbeat onto the SAME TickManager thread. Every 3s it logs an
+        // incrementing tick number + live entity counts + a sampled NPC position, so a
+        // moving/respawning NPC is visible across heartbeats.
+        var hb = new int[1];
+        var lastPos = new System.Numerics.Vector3[1];
+        TickManager.Instance.OnTick.Subscribe(_ =>
+        {
+            var n = ++hb[0];
+            var npcs = world.GetAllNpcs();
+            var doodads = world.GetAllDoodads().Count;
+            var sample = npcs.FirstOrDefault();
+            var pos = sample?.Transform?.World?.Position ?? System.Numerics.Vector3.Zero;
+            var moved = System.Numerics.Vector3.Distance(pos, lastPos[0]);
+            lastPos[0] = pos;
+            Logger.Info($"[B2.3][heartbeat] instance tick #{n} live npcs={npcs.Count} doodads={doodads} " +
+                        $"gameTime={TimeManager.Instance.Get():F0} sampleNpc={(sample?.TemplateId ?? 0)}@" +
+                        $"({pos.X:F1},{pos.Y:F1},{pos.Z:F1}) movedSinceLast={moved:F2}");
+        }, TimeSpan.FromSeconds(3), true);
     }
 }
