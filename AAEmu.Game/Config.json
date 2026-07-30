@@ -1,37 +1,70 @@
 {
-    "Id": 1,
-    "AdditionalesId": [],
-    "SecretKey": "test",
-    "Network": {
-        "Host": "*",
-        "Port": 1239,
-        "NumConnections": 10
-    },
-    "StreamNetwork": {
-        "Host": "*",
-        "Port": 1250
-    },
-    "WebApiNetwork": {
-        "Host": "*",
-        "Port": 1280
-    },
-    "LoginNetwork": {
-        "Host": "%login_host%",
-        "Port": "%login_port%"
-    },
-    "Connections": {
-        "MySQLProvider": {
-            "Host": "%db_host%",
-            "Port": "%db_port%",
-            "User": "%db_user%",
-            "Password": "%db_password%",
-            "Database": "aaemu_game"
-        }
-    },
-    "CharacterNameRegex": "^[a-zA-Z0-9а-яА-Я]{1,18}$",
-    "MaxConcurencyThreadPool": 8,
-    "HeightMapsEnable": true,
-    "DebugInfo": true,
-    "DebugInfoLevel": 100,
-	"DefaultLanguage" : "en_us"
+ "Id": 1,
+ "AdditionalesId": [],
+ "SecretKey": "test",
+ "Network": {
+  "Host": "*",
+  "Port": 1239,
+  "NumConnections": 10
+ },
+ "StreamNetwork": {
+  "Host": "*",
+  "Port": 1250
+ },
+ "WebApiNetwork": {
+  "Host": "*",
+  "Port": 1280
+ },
+ "LoginNetwork": {
+  "Host": "127.0.0.1",
+  "Port": 1234
+ },
+ "Connections": {
+  "MySQLProvider": {
+   "Host": "localhost",
+   "Port": "3306",
+   "User": "aaemu",
+   "Password": "AAEmu_srv_2026",
+   "Database": "aaemu_game"
+  },
+  "AutoApplyUpdates": true
+ },
+ "CharacterNameRegex": "^[a-zA-Z0-9\u0430-\u044f\u0410-\u042f]{1,18}$",
+ "MaxConcurencyThreadPool": 8,
+ "HeightMapsEnable": true,
+ "DebugInfo": false,
+ "DebugInfoLevel": 0,
+ "DefaultLanguage": "en_us",
+ "Credits": {
+  "Default": 5000,
+  "DailyLogin": 500,
+  "TickMinutes": 5,
+  "TickAmount": 50,
+  "TickAmountPremium": 100
+ },
+ "Loyalty": {
+  "Default": 200,
+  "DailyLogin": 10,
+  "TickMinutes": 30,
+  "TickAmount": 5,
+  "TickAmountPremium": 10
+ },
+ "Labor": {
+  "Default": 5000,
+  "DailyLogin": 0,
+  "TickMinutes": 5,
+  "TickAmount": 10,
+  "TickAmountPremium": 20
+ },
+ "LaborOffline": {
+  "Default": 0,
+  "DailyLogin": 0,
+  "TickMinutes": 5,
+  "TickAmount": 5,
+  "TickAmountPremium": 10
+ },
+ "ClusterNetwork": {
+  "Host": "*",
+  "Port": 1300
+ }
 }

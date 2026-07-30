@@ -9,6 +9,7 @@ using AAEmu.Game.Core.Managers.Stream;
 using AAEmu.Game.Core.Managers.UnitManagers;
 using AAEmu.Game.Core.Managers.World;
 using AAEmu.Game.Core.Network.Game;
+using AAEmu.Game.Core.Network.Cluster;
 using AAEmu.Game.Core.Network.Login;
 using AAEmu.Game.Core.Network.Stream;
 using AAEmu.Game.GameData.Framework;
@@ -126,6 +127,7 @@ public sealed class GameService : IHostedService, IDisposable
         GameNetwork.Instance.Start();
         StreamNetwork.Instance.Start();
         LoginNetwork.Instance.Start();
+        GatewayClusterServer.Instance.Start();
 
         stopWatch.Stop();
         Logger.Info($"Server started! Took {stopWatch.Elapsed}");
@@ -142,6 +144,7 @@ public sealed class GameService : IHostedService, IDisposable
         GameNetwork.Instance.Stop();
         StreamNetwork.Instance.Stop();
         LoginNetwork.Instance.Stop();
+        GatewayClusterServer.Instance.Stop();
 
         /*
         HousingManager.Instance.Save();

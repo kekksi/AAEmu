@@ -1,0 +1,9 @@
+{
+  "Zone": {
+    "GatewayHost": "127.0.0.1",
+    "GatewayPort": 1300,
+    "SecretKey": "test",
+    "ZoneId": 1,
+    "WorldTemplateId": 1
+  }
+}
