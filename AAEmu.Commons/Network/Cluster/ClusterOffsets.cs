@@ -9,4 +9,8 @@ public static class ClusterOffsets
     public const ushort GZRegisterResult = 0x0002;
     public const ushort ZGHeartbeat = 0x0003;
     public const ushort GZHeartbeatAck = 0x0004;
+
+    // B2.4a: client packet tunnel envelopes (raw client wire-frames)
+    public const ushort GZClientPacket = 0x0010;
+    public const ushort ZGClientPacket = 0x0011;
 }

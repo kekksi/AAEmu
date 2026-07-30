@@ -26,6 +26,8 @@ public class GatewayClusterServer : Singleton<GatewayClusterServer>
                 ZGRegisterZonePacket.TypeId, new ZGRegisterZonePacketHandler()),
             new ClusterPacketDescriptor<ZGHeartbeatPacket>(
                 ZGHeartbeatPacket.TypeId, new ZGHeartbeatPacketHandler()),
+            new ClusterPacketDescriptor<ZGClientPacket>(
+                ZGClientPacket.TypeId, new ZGClientPacketHandler()),
         };
         _handler = new ClusterProtocolHandler(descriptors);
         _handler.ClientDisconnected += con => ZoneRegistry.Instance.RemoveByConnection(con);

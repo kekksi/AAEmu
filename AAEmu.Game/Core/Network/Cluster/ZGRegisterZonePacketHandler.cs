@@ -27,5 +27,16 @@ public class ZGRegisterZonePacketHandler : IClusterPacketHandler<ZGRegisterZoneP
         Logger.Info("Zone {0} registered (worldTemplate {1}) from {2}",
             packet.ZoneId, packet.WorldTemplateId, connection.Ip);
         connection.SendPacket(new GZRegisterResultPacket(true, $"zone {packet.ZoneId} registered"));
+
+        // B2.4a self-test: prove the client-packet tunnel end-to-end once a zone is up.
+        // Sends a synthetic client frame (level-2, op 0x0001) for a fake connection to the zone,
+        // which logs it and echoes a frame back (see ZGClientPacketHandler).
+        if (AppConfiguration.Instance.ClusterNetwork?.TunnelSelfTest == true)
+        {
+            var frame = ClientFrameCodec.BuildClientFrame(0x0001, level: 2);
+            var sent = ZoneRegistry.Instance.ForwardClientPacket(packet.ZoneId, 999, frame);
+            Logger.Info("[B2.4a] gateway sent synthetic GZClientPacket conn=999 op=0x0001 to zone {0} (queued={1})",
+                packet.ZoneId, sent);
+        }
     }
 }

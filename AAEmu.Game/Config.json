@@ -65,6 +65,7 @@
  },
  "ClusterNetwork": {
   "Host": "*",
-  "Port": 1300
+  "Port": 1300,
+  "TunnelSelfTest": true
  }
 }

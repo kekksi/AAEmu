@@ -67,6 +67,9 @@ public partial class AppConfiguration
         public string Host { get; set; }
         public ushort Port { get; set; }
         public int NumConnections { get; set; }
+
+        /// <summary>B2.4a: when true the gateway fires a synthetic client-packet round-trip once a zone registers.</summary>
+        public bool TunnelSelfTest { get; set; }
     }
 
     public class DBConnections
