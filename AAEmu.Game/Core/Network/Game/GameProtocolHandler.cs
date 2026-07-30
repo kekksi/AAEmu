@@ -5,6 +5,7 @@ using AAEmu.Commons.Exceptions;
 using AAEmu.Commons.Network;
 using AAEmu.Commons.Network.Core;
 using AAEmu.Game.Core.Managers.World;
+using AAEmu.Game.Core.Network.Cluster;
 using AAEmu.Game.Core.Network.Connections;
 using AAEmu.Game.Services.Telemetry;
 
@@ -161,6 +162,18 @@ public class GameProtocolHandler : BaseProtocolHandler
                     }
                     else
                         stream = null;
+
+                    // B2.4b: inbound routing weiche. One complete client frame is reassembled at
+                    // this point (stream2). If this connection is currently owned by a zone process,
+                    // tunnel the raw frame there and SKIP the local dispatch for THIS frame. The
+                    // ownership table is EMPTY by default, so the monolith path below is unchanged.
+                    if (ClientRoutingTable.Instance.TryGetOwner(connection.Id, out var ownerZoneId))
+                    {
+                        var frameBytes = stream2.GetBytes();
+                        Cluster.ZoneRegistry.Instance.ForwardClientPacket(ownerZoneId, connection.Id, frameBytes);
+                        continue;
+                    }
+
                     stream2.ReadUInt16(); //len
                     stream2.ReadByte(); //unk
                     var level = stream2.ReadByte();
