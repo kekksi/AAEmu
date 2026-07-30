@@ -64,6 +64,17 @@ public class GameConnection
     }
 
     /// <summary>
+    /// B2.4c: writes an already-framed raw client payload straight to the socket, bypassing the
+    /// GamePacket encode step. The payload is a complete client wire-frame (e.g. produced by a
+    /// zone process and tunneled back over the cluster channel via a ZGClientPacket).
+    /// </summary>
+    /// <param name="payload"></param>
+    public void SendRaw(byte[] payload)
+    {
+        SendPacket(payload);
+    }
+
+    /// <summary>
     /// On connect event
     /// </summary>
     public void OnConnect()
