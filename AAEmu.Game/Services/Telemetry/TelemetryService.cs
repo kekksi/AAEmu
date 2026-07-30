@@ -167,10 +167,12 @@ public sealed class TelemetryService : IHostedService, ITelemetrySink, IDisposab
         return bulkQueued;
     }
 
+    private int _disposed;
     public void Dispose()
     {
+        if (System.Threading.Interlocked.Exchange(ref _disposed, 1) == 1) return;
         TelemetryEmitter.SetSink(null);
-        _stopSource.Cancel();
+        try { _stopSource.Cancel(); } catch (System.ObjectDisposedException) { }
         _stopSource.Dispose();
     }
 
