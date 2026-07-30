@@ -84,6 +84,20 @@ public class ZGRegisterZonePacketHandler : IClusterPacketHandler<ZGRegisterZoneP
         zoneCon.SendPacket(new GZEnterZonePacket(HandoffTestConnId, TestAccountId, TestCharacterId));
         Logger.Info("[B2.6b] gateway sent GZEnterZone conn={0} account={1} char={2} to zone {3} (synthetic hand-off)",
             HandoffTestConnId, TestAccountId, TestCharacterId, zoneId);
+
+        // B2.6c proof: the GZEnterZone above makes the zone load+spawn the char AND emit the
+        // char-enter init sequence (SCCharacterState 0x40, GamePoints 0x188, ActionSlots 0x12d,
+        // inventory/quest/faction/... ) back through the tunnel. To also produce the client'''s OWN
+        // SCUnitState (0x69) the monolith-faithful way, we now drive a synthetic CSSpawnCharacter
+        // frame (op 0x026) over the SAME tunnel. In the monolith SCUnitState is sent by
+        // CSSpawnCharacterPacket (the frame the client sends right after select), NOT by the select
+        // block - so emitting it from this tunneled frame (dispatched against the real zone handler
+        // with ActiveChar already bound by GZEnterZone) matches the monolith and avoids a double-send.
+        // Body = a single 0x00 VisualOptions flag byte (flag&... all clear -> no further reads).
+        var spawnFrame = ClientFrameCodec.BuildClientFrame(0x0026, level: 2, body: new byte[] { 0x00 });
+        var spawnSent = ZoneRegistry.Instance.ForwardClientPacket(zoneId, HandoffTestConnId, spawnFrame);
+        Logger.Info("[B2.6c] gateway sent synthetic CSSpawnCharacter conn={0} op=0x0026 to zone {1} (queued={2}) -> expect SCUnitState 0x69 back",
+            HandoffTestConnId, zoneId, spawnSent);
     }
 
     /// <summary>
