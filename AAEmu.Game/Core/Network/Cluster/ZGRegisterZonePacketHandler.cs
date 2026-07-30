@@ -16,6 +16,13 @@ public class ZGRegisterZonePacketHandler : IClusterPacketHandler<ZGRegisterZoneP
     // Synthetic connection id used only by the tunnel self-test (no live client socket).
     private const uint SelfTestConnId = 999;
 
+    // B2.6b character-handoff self-test: a distinct synthetic connection id + the seeded test
+    // account/character in the shared DB (created via SQL, see report). Sending a GZEnterZone for
+    // these makes the zone load + spawn a REAL character into its own WorldInstance - the B2.6b proof.
+    private const uint HandoffTestConnId = 997;
+    private const uint TestAccountId = 9001;
+    private const uint TestCharacterId = 9001;
+
     public void Execute(ZGRegisterZonePacket packet, ClusterConnection connection)
     {
         if (packet.SecretKey != AppConfiguration.Instance.SecretKey)
@@ -53,7 +60,30 @@ public class ZGRegisterZonePacketHandler : IClusterPacketHandler<ZGRegisterZoneP
                 SelfTestConnId, packet.ZoneId, sent);
 
             RunOwnershipStateMachineProof(packet.ZoneId);
+            RunCharacterHandoffProof(packet.ZoneId);
         }
+    }
+
+    /// <summary>
+    /// B2.6b synthetic character hand-off proof (self-test only). Sends a GZEnterZonePacket for the
+    /// seeded test account/character to the zone that just registered. This is the exact packet the
+    /// gateway sends from ClientOwnershipHandoff.TryEnterZone at the start of CSSelectCharacter for a
+    /// zone-owned character - but here it is driven synthetically, with no live client. The zone
+    /// GZEnterZonePacketHandler then loads the character straight from the shared DB and spawns it
+    /// into its own WorldInstance, which its [B2.6b] log line proves.
+    /// </summary>
+    private static void RunCharacterHandoffProof(uint zoneId)
+    {
+        var zoneCon = ZoneRegistry.Instance.Get(zoneId);
+        if (zoneCon == null)
+        {
+            Logger.Warn("[B2.6b] handoff self-test: zone {0} not registered", zoneId);
+            return;
+        }
+
+        zoneCon.SendPacket(new GZEnterZonePacket(HandoffTestConnId, TestAccountId, TestCharacterId));
+        Logger.Info("[B2.6b] gateway sent GZEnterZone conn={0} account={1} char={2} to zone {3} (synthetic hand-off)",
+            HandoffTestConnId, TestAccountId, TestCharacterId, zoneId);
     }
 
     /// <summary>

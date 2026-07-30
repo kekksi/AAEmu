@@ -13,4 +13,7 @@ public static class ClusterOffsets
     // B2.4a: client packet tunnel envelopes (raw client wire-frames)
     public const ushort GZClientPacket = 0x0010;
     public const ushort ZGClientPacket = 0x0011;
+
+    // B2.6b: gateway -> zone character hand-off (zone loads + spawns the char itself)
+    public const ushort GZEnterZone = 0x0012;
 }

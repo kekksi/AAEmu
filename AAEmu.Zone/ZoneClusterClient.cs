@@ -37,6 +37,8 @@ public class ZoneClusterClient
                 GZHeartbeatAckPacket.TypeId, new GZHeartbeatAckPacketHandler(_logger)),
             new ClusterPacketDescriptor<GZClientPacket>(
                 GZClientPacket.TypeId, new GZClientPacketHandler(_logger)),
+            new ClusterPacketDescriptor<GZEnterZonePacket>(
+                GZEnterZonePacket.TypeId, new GZEnterZonePacketHandler(_logger)),
         };
         _handler = new ClusterProtocolHandler(descriptors);
         _handler.ClientConnected += OnConnected;

@@ -1,3 +1,4 @@
+using AAEmu.Commons.Network.Cluster.Packets;
 using AAEmu.Game.Core.Network.Connections;
 
 using NLog;
@@ -61,6 +62,41 @@ public static class ClientOwnershipHandoff
         Logger.Info("[B2.6a] enterworld ownership: conn={0} char={1} -> zone {2} (owners now={3})",
             connection.Id, connection.ActiveChar?.Name ?? "?", targetZoneId,
             ClientRoutingTable.Instance.Count);
+        return true;
+    }
+
+    /// <summary>
+    /// B2.6b: character hand-off. Called EARLY in CSSelectCharacter (before any gateway-local char
+    /// load/spawn). If the connection target world is a registered cluster zone, this:
+    ///   1. establishes ownership so every subsequent client frame tunnels to that zone, and
+    ///   2. sends a <see cref="GZEnterZonePacket"/> so the ZONE loads + spawns the character itself.
+    /// The caller then SKIPS the gateway-local load entirely (no ObjectIdManager.GetNextId, no
+    /// TryAddCharacter, no init-sends on the gateway) - the zone is the sole owner of that character.
+    ///
+    /// Returns false when no target zone is registered, in which case the caller runs the unchanged
+    /// monolith path (load + spawn locally). With no zone connected this is a pure no-op, so the
+    /// stand-alone monolith behaves EXACTLY as before.
+    /// </summary>
+    public static bool TryEnterZone(GameConnection connection, uint characterId)
+    {
+        if (connection == null)
+            return false;
+
+        var targetZoneId = ResolveZoneId(connection);
+        var zoneCon = ZoneRegistry.Instance.Get(targetZoneId);
+        if (zoneCon == null)
+        {
+            Logger.Trace("[B2.6b] no zone {0} registered - conn {1} loads locally (monolith path)",
+                targetZoneId, connection.Id);
+            return false;
+        }
+
+        // Establish ownership BEFORE we send the hand-off so any client frame that races in behind
+        // the select is tunneled to the zone rather than dispatched on the gateway.
+        ClientRoutingTable.Instance.SetOwner(connection.Id, targetZoneId);
+        zoneCon.SendPacket(new GZEnterZonePacket(connection.Id, connection.AccountId, characterId));
+        Logger.Info("[B2.6b] char hand-off: conn={0} account={1} char={2} -> zone {3} (gateway-local load SKIPPED)",
+            connection.Id, connection.AccountId, characterId, targetZoneId);
         return true;
     }
 }

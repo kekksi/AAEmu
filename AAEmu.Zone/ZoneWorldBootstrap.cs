@@ -529,11 +529,12 @@ public static class ZoneWorldBootstrap
             var n = ++hb[0];
             var npcs = world.GetAllNpcs();
             var doodads = world.GetAllDoodads().Count;
+            var players = WorldManager.Instance.GetAllCharacters().Count; // B2.6b: hand-off chars live here
             var sample = npcs.FirstOrDefault();
             var pos = sample?.Transform?.World?.Position ?? System.Numerics.Vector3.Zero;
             var moved = System.Numerics.Vector3.Distance(pos, lastPos[0]);
             lastPos[0] = pos;
-            Logger.Info($"[B2.3][heartbeat] instance tick #{n} live npcs={npcs.Count} doodads={doodads} " +
+            Logger.Info($"[B2.3][heartbeat] instance tick #{n} live npcs={npcs.Count} doodads={doodads} players={players} " +
                         $"gameTime={TimeManager.Instance.Get():F0} sampleNpc={(sample?.TemplateId ?? 0)}@" +
                         $"({pos.X:F1},{pos.Y:F1},{pos.Z:F1}) movedSinceLast={moved:F2}");
         }, TimeSpan.FromSeconds(3), true);

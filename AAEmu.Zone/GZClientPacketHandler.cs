@@ -28,6 +28,16 @@ public class GZClientPacketHandler(ILogger logger) : IClusterPacketHandler<GZCli
     // One real GameConnection (over a TunnelSession) per tunneled client connectionId.
     private static readonly ConcurrentDictionary<uint, GameConnection> Clients = new();
 
+    /// <summary>
+    /// B2.6b: get-or-create the tunnel-backed <see cref="GameConnection"/> for a client connection.
+    /// Shared with <c>GZEnterZonePacketHandler</c> so the character hand-off can bind the ActiveChar
+    /// onto the SAME GameConnection that subsequently tunneled client frames dispatch against. The
+    /// GZEnterZone hand-off normally arrives before any client frame, so this creates the entry; the
+    /// later GZClientPacket path then reuses it via <see cref="Clients"/>.
+    /// </summary>
+    public static GameConnection GetOrCreateConnection(uint connectionId, ClusterConnection gateway) =>
+        Clients.GetOrAdd(connectionId, id => new GameConnection(new TunnelSession(id, gateway)));
+
     // Lazily grab the zone-local GameProtocolHandler, fully populated with the C2G + proxy packet
     // registry. GameNetwork's private ctor runs all RegisterPacket(...) calls but opens NO socket
     // (that only happens in Start(), which we never call). We read the private _handler field once.
@@ -48,8 +58,7 @@ public class GZClientPacketHandler(ILogger logger) : IClusterPacketHandler<GZCli
             packet.ConnectionId, len, op);
 
         // Build/reuse a genuine GameConnection whose ISession is a socket-less TunnelSession.
-        var client = Clients.GetOrAdd(packet.ConnectionId,
-            id => new GameConnection(new TunnelSession(id, connection)));
+        var client = GetOrCreateConnection(packet.ConnectionId, connection);
 
         // REAL dispatch: run the frame through the zone-local GameProtocolHandler. The matching
         // C2G handler executes in this process; replies flow back via GameConnection.SendPacket ->

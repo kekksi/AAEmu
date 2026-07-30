@@ -22,6 +22,15 @@ public class CSSelectCharacterPacket() : GamePacket(CSOffsets.CSSelectCharacterP
 
         if (Connection.Characters.TryGetValue(characterId, out var character))
         {
+            // B2.6b: character hand-off. If the target world for this connection is a herausgeloeste
+            // (split-out) cluster zone, DO NOT load or spawn the character on the gateway. Instead the
+            // zone process loads it from the shared DB and spawns it into its own WorldInstance. We
+            // skip the ENTIRE gateway-local load/spawn/init-send block below (no ObjectIdManager id,
+            // no TryAddCharacter, no init packets) and return early. If no zone is registered this is
+            // a no-op and the unchanged monolith path below runs exactly as before.
+            if (ClientOwnershipHandoff.TryEnterZone(Connection, characterId))
+                return;
+
             // Force player into main_world when coming from character select
             character.Transform.InstanceId = WorldManager.DefaultInstanceId;
             // Despawn any old pets this character might have even before loading it
