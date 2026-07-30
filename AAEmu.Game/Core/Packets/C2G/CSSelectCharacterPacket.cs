@@ -3,6 +3,7 @@ using AAEmu.Game.Core.Managers;
 using AAEmu.Game.Core.Managers.Id;
 using AAEmu.Game.Core.Managers.UnitManagers;
 using AAEmu.Game.Core.Managers.World;
+using AAEmu.Game.Core.Network.Cluster;
 using AAEmu.Game.Core.Network.Game;
 using AAEmu.Game.Core.Packets.G2C;
 using AAEmu.Game.Models.Game.Char;
@@ -115,6 +116,13 @@ public class CSSelectCharacterPacket() : GamePacket(CSOffsets.CSSelectCharacterP
             character.Breath = character.LungCapacity;
 
             Connection.ActiveChar.OnZoneChange(0, Connection.ActiveChar.Transform.ZoneId);
+
+            // B2.6a: EnterWorld-triggered zone ownership hand-off. The character is now loaded
+            // and bound to its world instance (forced into main_world above), so its target
+            // cluster-zone is known. Hand the connection over to that zone IF it is registered;
+            // from here the routing weiche in GameProtocolHandler.OnReceive tunnels all further
+            // client frames to the zone. If no zone is connected this is a no-op (monolith path).
+            ClientOwnershipHandoff.TryClaim(Connection);
         }
         else
         {

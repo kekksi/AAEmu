@@ -54,11 +54,28 @@ public class GZClientPacketHandler(ILogger logger) : IClusterPacketHandler<GZCli
         // REAL dispatch: run the frame through the zone-local GameProtocolHandler. The matching
         // C2G handler executes in this process; replies flow back via GameConnection.SendPacket ->
         // TunnelSession -> ZGClientPacket -> gateway (no synthetic echo anymore).
+        //
+        // B2.6a: post-EnterWorld frames now really arrive here (movement, spawn, skills, ...). Until
+        // B2.6b loads the character in the zone, the zone-local GameConnection has ActiveChar == null,
+        // so a handler that dereferences the active character will throw (or CSSpawnCharacter requests
+        // a shutdown). That MUST NOT take the zone down: this dispatch is wrapped so a single bad frame
+        // is logged and turned into a no-op instead of crashing the zone tick/cluster loop. Sharp char
+        // load in the zone is B2.6b.
         logger.LogInformation("[B2.5] zone dispatching conn={ConnId} op=0x{Op:x4} to REAL GameProtocolHandler",
             packet.ConnectionId, op);
-        ZoneHandler.Value.OnReceive(client, payload, 0, len);
-        logger.LogInformation("[B2.5] zone real dispatch complete conn={ConnId} op=0x{Op:x4}",
-            packet.ConnectionId, op);
+        try
+        {
+            ZoneHandler.Value.OnReceive(client, payload, 0, len);
+            logger.LogInformation("[B2.5] zone real dispatch complete conn={ConnId} op=0x{Op:x4}",
+                packet.ConnectionId, op);
+        }
+        catch (Exception ex)
+        {
+            // B2.6a passive zone: no loaded character yet -> swallow + log, keep the zone alive.
+            logger.LogWarning(ex,
+                "[B2.6a] zone ignored post-enterworld frame conn={ConnId} op=0x{Op:x4} (no char loaded yet, B2.6b pending)",
+                packet.ConnectionId, op);
+        }
     }
 
     /// <summary>

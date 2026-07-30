@@ -51,6 +51,45 @@ public class ZGRegisterZonePacketHandler : IClusterPacketHandler<ZGRegisterZoneP
             var sent = ZoneRegistry.Instance.ForwardClientPacket(packet.ZoneId, SelfTestConnId, frame);
             Logger.Info("[B2.5] gateway sent Ping GZClientPacket conn={0} op=0x0012 to zone {1} (queued={2})",
                 SelfTestConnId, packet.ZoneId, sent);
+
+            RunOwnershipStateMachineProof(packet.ZoneId);
         }
+    }
+
+    /// <summary>
+    /// B2.6a synthetic proof of the EnterWorld ownership state machine, run once a zone registers
+    /// (self-test only). It exercises the EXACT routing decision that
+    /// <c>GameProtocolHandler.OnReceive</c> makes per frame:
+    ///   1. no owner        -> TryGetOwner == false -> frame would DISPATCH LOCALLY (monolith path)
+    ///   2. TryClaim (=SetOwner, as fired at end of CSSelectCharacter) -> TryGetOwner == true
+    ///      -> frame is TUNNELED via ZoneRegistry.ForwardClientPacket to the owning zone
+    ///   3. ClearOwner (as fired in GameProtocolHandler.OnDisconnect) -> TryGetOwner == false
+    ///      -> frame would DISPATCH LOCALLY again
+    /// A distinct synthetic connection id (998) is used so it never collides with a real client or
+    /// the B2.5 Ping self-test connection (999).
+    /// </summary>
+    private static void RunOwnershipStateMachineProof(uint zoneId)
+    {
+        const uint proofConn = 998;
+        var frame = ClientFrameCodec.BuildClientFrame(0x0012, level: 2, body: new byte[20]);
+
+        // Phase 1: no owner -> local dispatch
+        var owned0 = ClientRoutingTable.Instance.TryGetOwner(proofConn, out _);
+        Logger.Info("[B2.6a-proof] phase1 conn={0} owned={1} -> route=LOCAL (monolith dispatch)", proofConn, owned0);
+
+        // Phase 2: simulate the CSSelectCharacter hand-off, then route a follow-up frame
+        ClientRoutingTable.Instance.SetOwner(proofConn, zoneId);
+        var owned1 = ClientRoutingTable.Instance.TryGetOwner(proofConn, out var ownerZone);
+        if (owned1)
+        {
+            var tunneled = ZoneRegistry.Instance.ForwardClientPacket(ownerZone, proofConn, frame);
+            Logger.Info("[B2.6a-proof] phase2 conn={0} owned={1} zone={2} -> route=TUNNEL (ForwardClientPacket queued={3})",
+                proofConn, owned1, ownerZone, tunneled);
+        }
+
+        // Phase 3: simulate disconnect ClearOwner -> back to local dispatch
+        ClientRoutingTable.Instance.ClearOwner(proofConn);
+        var owned2 = ClientRoutingTable.Instance.TryGetOwner(proofConn, out _);
+        Logger.Info("[B2.6a-proof] phase3 conn={0} owned={1} -> route=LOCAL again (ownership cleared)", proofConn, owned2);
     }
 }
