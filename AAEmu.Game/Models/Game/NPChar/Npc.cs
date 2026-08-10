@@ -31,6 +31,7 @@ public partial class Npc : Unit
     public NpcTemplate Template { get; set; }
     //public Item[] Equip { get; set; }
     public NpcSpawner Spawner { get; set; }
+    public DateTime DeadTime { get; set; } = DateTime.MinValue;
 
     /// <summary>
     /// Created by WorldIntegration.MirrorZoneNpcSpawn — zone owns AI; Game invents thin SCUnitState.
@@ -867,6 +868,8 @@ public partial class Npc : Unit
 
     public override void DoDie(BaseUnit killer, KillReason killReason)
     {
+        DeadTime = DateTime.UtcNow;
+
         var eligiblePlayers = new HashSet<Character>();
         if (CharacterTagging.TagTeam != 0)
         {
