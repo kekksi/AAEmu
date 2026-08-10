@@ -418,46 +418,63 @@ public class GameScheduleManager(
 
     private static (bool hasStarted, bool hasEnded) CheckData(GameSchedules value)
     {
-        var now = DateTime.UtcNow;
+        return EvaluatePeriod(value, DateTime.UtcNow);
+    }
+
+    private static (bool hasStarted, bool hasEnded) EvaluatePeriod(GameSchedules value, DateTime now)
+    {
         var currentTime = now.TimeOfDay;
-        var currentDate = now.Date;
-
-        // Преобразуем стандартный DayOfWeek в ваш кастомный DayOfWeek
-        var currentDayOfWeek = (DayOfWeek)((int)now.DayOfWeek + 1);
-
-        // Проверка на нулевые дату и месяц
-        var startDate = value is { StYear: > 0, StMonth: > 0, StDay: > 0 }
-            ? new DateTime(value.StYear, value.StMonth, value.StDay)
-            : DateTime.MinValue;
-
-        var endDate = value is { EdYear: > 0, EdMonth: > 0, EdDay: > 0 }
-            ? new DateTime(value.EdYear, value.EdMonth, value.EdDay)
-            : DateTime.MaxValue;
-
         var startTime = new TimeSpan(value.StartTime, value.StartTimeMin, 0);
         var endTime = new TimeSpan(value.EndTime, value.EndTimeMin, 0);
+        var hasDailyWindow = value.StartTime != 0 || value.StartTimeMin != 0 ||
+                             value.EndTime != 0 || value.EndTimeMin != 0;
 
-        var hasStarted = false;
-        var hasEnded = false;
+        // st_*/ed_* bound the lifetime of the schedule. When a row also carries a daily window,
+        // its start/end clock values define the first and last edge just as they do on every day
+        // in between. Rows without a daily window use st_hour/ed_hour for those two edges.
+        var firstEdge = hasDailyWindow
+            ? startTime
+            : new TimeSpan(value.StHour, value.StMin, 0);
+        var lastEdge = hasDailyWindow
+            ? endTime
+            : new TimeSpan(value.EdHour, value.EdMin, 0);
 
-        // Проверка на попадание в период по дате и времени
-        if ((startDate == DateTime.MinValue || currentDate > startDate || (currentDate == startDate && currentTime >= startTime)) &&
-            (endDate == DateTime.MaxValue || currentDate < endDate || (currentDate == endDate && currentTime <= endTime)))
+        if (value is { StYear: > 0, StMonth: > 0, StDay: > 0 })
         {
-            // Проверка на попадание в период по дню недели
-            if (currentDayOfWeek == value.DayOfWeekId || value.DayOfWeekId == DayOfWeek.Invalid)
-            {
-                hasStarted = true;
-            }
+            var starts = new DateTime(value.StYear, value.StMonth, value.StDay, 0, 0, 0, DateTimeKind.Utc)
+                .Add(firstEdge);
+            if (now < starts)
+                return (false, false);
         }
 
-        // Проверка на окончание периода
-        if (endDate != DateTime.MaxValue && (currentDate > endDate || (currentDate == endDate && currentTime >= endTime)))
+        if (value is { EdYear: > 0, EdMonth: > 0, EdDay: > 0 })
         {
-            hasEnded = true;
+            var ends = new DateTime(value.EdYear, value.EdMonth, value.EdDay, 0, 0, 0, DateTimeKind.Utc)
+                .Add(lastEdge);
+            if (now >= ends)
+                return (false, true);
         }
 
-        return (hasStarted, hasEnded);
+        // For a window that crosses midnight, the after-midnight portion still belongs to the
+        // weekday on which the window opened.
+        var scheduleDay = now;
+        if (hasDailyWindow && startTime > endTime && currentTime < endTime)
+            scheduleDay = now.AddDays(-1);
+
+        var currentDayOfWeek = (DayOfWeek)((int)scheduleDay.DayOfWeek + 1);
+        if (value.DayOfWeekId != DayOfWeek.Invalid && currentDayOfWeek != value.DayOfWeekId)
+            return (false, false);
+
+        if (!hasDailyWindow)
+            return (true, false);
+
+        var inDailyWindow = startTime < endTime
+            ? currentTime >= startTime && currentTime < endTime
+            : startTime > endTime
+                ? currentTime >= startTime || currentTime < endTime
+                : currentTime == startTime;
+
+        return (inDailyWindow, false);
     }
 
     private static (bool hasStarted, bool hasEnded) CheckData0(GameSchedules value)
