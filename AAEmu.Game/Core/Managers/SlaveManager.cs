@@ -230,6 +230,10 @@ public class SlaveManager(WorldInstance parentWorldInstance)
             return;
         }
 
+        var currentSlave = GetIsMounted(character.ObjId, out _);
+        if (currentSlave != null)
+            UnbindSlave(character, currentSlave.TlId, AttachUnitReason.BoardTransfer);
+
         character.BroadcastPacket(new SCUnitAttachedPacket(character.ObjId, attachPoint, bondKind, objId), true);
         character.AttachedPoint = attachPoint;
 
